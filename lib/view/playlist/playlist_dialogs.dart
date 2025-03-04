@@ -5,7 +5,7 @@ import 'package:musicplayer/view_model/providers/playlist_provider.dart';
 import 'package:provider/provider.dart';
 
 /// **Shows a dialog to create or edit a playlist.**
-/// - If `playlist` is `null`, a new playlist is created.
+/// - If playlist is null, a new playlist is created.
 /// - Allows users to select songs for the playlist.
 void showCreateOrEditPlaylistDialog({
   required BuildContext context,
