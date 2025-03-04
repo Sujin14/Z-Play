@@ -7,9 +7,6 @@ import 'package:musicplayer/view_model/providers/music_provider.dart';
 import 'package:musicplayer/view_model/providers/playlist_provider.dart';
 import 'package:provider/provider.dart';
 
-/// **Playlist Screen**
-/// - Displays all playlists.
-/// - Allows users to **create, edit, delete, and view** playlists.
 class PlaylistScreen extends StatelessWidget {
   const PlaylistScreen({super.key});
 
@@ -25,31 +22,23 @@ class PlaylistScreen extends StatelessWidget {
     );
   }
 
-  /// **App Bar**
   AppBar _buildAppBar(double hi) {
     return AppBar(
-      title: Text(
-        'Your Playlists',
-        style: TextStyle(fontSize: hi / 45),
-      ),
+      title: Text('Your Playlists', style: TextStyle(fontSize: hi / 45)),
     );
   }
 
-  /// **Floating Action Button to Create a New Playlist**
   Widget _buildFloatingActionButton(BuildContext context, double hi) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 13),
       child: FloatingActionButton.extended(
-        label: Text(
-          "Add New Playlist",
-          style: TextStyle(color: Colors.white, fontSize: hi / 60),
-        ),
+        label: Text("Add New Playlist",
+            style: TextStyle(color: Colors.white, fontSize: hi / 60)),
         onPressed: () => _showCreatePlaylistDialog(context),
       ),
     );
   }
 
-  /// **Playlist Grid View**
   Widget _buildPlaylistGrid(
       BuildContext context, PlaylistProvider playlistProvider, double hi) {
     if (playlistProvider.playlists.isEmpty) {
@@ -66,7 +55,8 @@ class PlaylistScreen extends StatelessWidget {
       child: GridView.builder(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: (MediaQuery.of(context).size.width / 2) / (hi / 4),
+          childAspectRatio:
+              (MediaQuery.of(context).size.width / 2) / (hi / 3.5),
         ),
         itemCount: playlistProvider.playlists.length,
         itemBuilder: (context, index) {
@@ -77,7 +67,6 @@ class PlaylistScreen extends StatelessWidget {
     );
   }
 
-  /// **Opens the Create Playlist Dialog**
   void _showCreatePlaylistDialog(BuildContext context) {
     final musicProvider = Provider.of<MusicProvider>(context, listen: false);
     final playlistProvider =
@@ -90,9 +79,6 @@ class PlaylistScreen extends StatelessWidget {
   }
 }
 
-/// **Playlist Card Widget**
-/// - Displays playlist details.
-/// - Allows editing and deletion of playlists.
 class PlaylistCard extends StatelessWidget {
   final Playlist playlist;
 
@@ -107,19 +93,24 @@ class PlaylistCard extends StatelessWidget {
       onTap: () => _navigateToPlaylistDetail(context, playlist),
       child: Card(
         elevation: 4,
-        child: GridTile(
-          header: const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: AlbumArtWidget(),
+        child: SizedBox(
+          height: hi / 3.2,
+          child: GridTile(
+            header: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: const AlbumArtWidget(),
+            ),
+            footer: Padding(
+              padding: const EdgeInsets.all(10),
+              child: _buildPlaylistInfo(context, hi, playlistProvider),
+            ),
+            child: Container(),
           ),
-          footer: _buildPlaylistInfo(context, hi, playlistProvider),
-          child: const Card(),
         ),
       ),
     );
   }
 
-  /// **Navigates to Playlist Detail Screen**
   void _navigateToPlaylistDetail(BuildContext context, Playlist playlist) {
     Navigator.push(
       context,
@@ -129,51 +120,42 @@ class PlaylistCard extends StatelessWidget {
     );
   }
 
-  /// **Playlist Info and Action Buttons**
   Widget _buildPlaylistInfo(
       BuildContext context, double hi, PlaylistProvider playlistProvider) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Playlist Name
-                Text(
-                  playlist.name.toUpperCase(),
-                  overflow: TextOverflow.ellipsis,
-                  style:
-                      TextStyle(fontWeight: FontWeight.bold, fontSize: hi / 60),
-                ),
-                // Number of Songs
-                Text(
-                  '${playlist.songs.length} songs'.toUpperCase(),
-                  style: TextStyle(fontSize: hi / 70),
-                ),
-              ],
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20),
+              Text(
+                playlist.name.toUpperCase(),
+                overflow: TextOverflow.ellipsis,
+                style:
+                    TextStyle(fontWeight: FontWeight.bold, fontSize: hi / 50),
+              ),
+              Text(
+                '${playlist.songs.length} songs',
+                style: TextStyle(fontSize: hi / 60, color: Colors.grey),
+              ),
+            ],
           ),
-          // Edit and Delete Buttons
-          _buildEditButton(context, hi),
-          _buildDeleteButton(context, hi, playlistProvider),
-        ],
-      ),
+        ),
+        _buildEditButton(context, hi),
+        _buildDeleteButton(context, hi, playlistProvider),
+      ],
     );
   }
 
-  /// **Edit Playlist Button**
   Widget _buildEditButton(BuildContext context, double hi) {
     return IconButton(
-      icon: Icon(Icons.edit,
-          color: const Color.fromARGB(255, 219, 166, 7), size: hi / 35),
+      icon: Icon(Icons.edit, color: Colors.amber, size: hi / 35),
       onPressed: () => showEditPlaylistNameDialog(context, playlist),
     );
   }
 
-  /// **Delete Playlist Button**
   Widget _buildDeleteButton(
       BuildContext context, double hi, PlaylistProvider playlistProvider) {
     return IconButton(
@@ -189,35 +171,34 @@ class PlaylistCard extends StatelessWidget {
     );
   }
 
-  /// **Shows Confirmation Dialog Before Deleting Playlist**
   Future<bool> _showDeleteConfirmationDialog(
       BuildContext context, String playlistName) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Playlist'),
-        content: Text('Are you sure you want to delete "$playlistName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete Playlist'),
+            content: Text('Are you sure you want to delete "$playlistName"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child:
+                    const Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
+        ) ??
+        false;
   }
 
-  /// **Shows SnackBar After Deleting Playlist**
   void _showDeleteSnackbar(BuildContext context, String playlistName) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Deleted $playlistName'),
-        duration: Duration(seconds: 1),
+        duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(10),
       ),
