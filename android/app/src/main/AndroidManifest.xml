@@ -7,7 +7,8 @@
     <application
         android:label="Z-Play"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <activity
             android:name="com.sujin.musicplayer.MainActivity"
             android:exported="true"
