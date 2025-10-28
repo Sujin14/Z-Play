@@ -1,0 +1,8 @@
+# Tell GitHub linguist to classify only Dart code
+*.dart linguist-language=Dart
+*.kt linguist-detectable=false
+*.java linguist-detectable=false
+*.cpp linguist-detectable=false
+*.h linguist-detectable=false
+*.gradle linguist-detectable=false
+*.xml linguist-detectable=false
