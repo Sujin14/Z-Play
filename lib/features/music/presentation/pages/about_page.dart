@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:musicplayer/constants/themes.dart';
+import '../../../../constants/themes.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -48,7 +48,7 @@ class AboutPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'Version: 1.0.0+3',
+              'Version: 1.0.2',
               style: style(fontSize: hi / 50, fontWeight: FontWeight.normal),
             ),
             const Spacer(),

@@ -5,7 +5,6 @@ class MusicAnimation extends StatelessWidget {
   final AnimationController lottieController;
   final double hi;
   final double wi;
-
   const MusicAnimation({
     super.key,
     required this.lottieController,
@@ -16,7 +15,7 @@ class MusicAnimation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: hi / 2.5,
+      height: hi / 2.8,
       child: Lottie.asset(
         'assets/json/music_player.json',
         height: hi - 120,

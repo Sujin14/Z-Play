@@ -3,7 +3,7 @@ description: "An offline music player application."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 
-version: 1.0.0+3
+version: 1.0.2+4
 
 environment:
   sdk: ^3.6.0
@@ -46,7 +46,9 @@ dev_dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/images/app_icon.jpeg"
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#121212" # optional: dark background
+  adaptive_icon_foreground: "assets/images/app_icon.png"
 flutter:
   uses-material-design: true
 

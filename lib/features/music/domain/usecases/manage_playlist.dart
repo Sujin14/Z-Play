@@ -20,4 +20,8 @@ class ManagePlaylist {
   Future<void> deletePlaylist(PlaylistEntity playlist) async {
     await repository.deletePlaylist(playlist);
   }
+  Future<void> renamePlaylist(
+      PlaylistEntity playlist, String newName) async {
+    await repository.renamePlaylist(playlist, newName);
+  }
 }

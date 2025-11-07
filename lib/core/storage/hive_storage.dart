@@ -51,6 +51,26 @@ class HiveStorage {
     loadPlaylists();
   }
 
+  static Future<void> savePlaylist(Playlist playlist) async {
+    var playlistsBox = Hive.box<Playlist>('playlistsBox');
+
+    final existingKey = playlistsBox.keys.firstWhere(
+      (key) {
+        final stored = playlistsBox.get(key);
+        return stored != null && stored.name == playlist.name;
+      },
+      orElse: () => null,
+    );
+
+    if (existingKey != null) {
+      await playlistsBox.put(existingKey, playlist);
+    } else {
+      await playlistsBox.add(playlist);
+    }
+
+    loadPlaylists();
+  }
+
   static Future<void> addSongToPlaylist(
       Playlist playlist, MusicFile song) async {
     if (!playlist.songs.any((s) => s.path == song.path)) {

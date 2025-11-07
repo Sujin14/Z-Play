@@ -15,6 +15,26 @@ class PlaylistRepositoryImpl implements PlaylistRepository {
     await HiveStorage.createPlaylist(playlist.name);
   }
 
+  /// ✅ Rename a playlist without losing its songs
+  @override
+  Future<void> renamePlaylist(PlaylistEntity playlist, String newName) async {
+    // Get all existing playlists
+    final playlists = HiveStorage.getPlaylists();
+
+    // Find the one to rename
+    final index = playlists.indexWhere((p) => p.name == playlist.name);
+    if (index == -1) return;
+
+    final updatedPlaylist = Playlist(
+      name: newName,
+      songs: playlists[index].songs, // keep existing songs intact
+    );
+
+    // Delete the old playlist and save the renamed one
+    await HiveStorage.deletePlaylist(playlists[index]);
+    await HiveStorage.savePlaylist(updatedPlaylist);
+  }
+
   @override
   Future<void> addSongToPlaylist(
       PlaylistEntity playlist, MusicFileEntity song) async {
@@ -53,12 +73,16 @@ class PlaylistRepositoryImpl implements PlaylistRepository {
   @override
   Future<List<PlaylistEntity>> getPlaylists() async {
     return HiveStorage.getPlaylists()
-        .map((p) => PlaylistEntity(
-              name: p.name,
-              songs: p.songs
-                  .map((s) => MusicFileEntity(path: s.path, title: s.title))
-                  .toList(),
-            ))
+        .map(
+          (p) => PlaylistEntity(
+            name: p.name,
+            songs: p.songs
+                .map(
+                  (s) => MusicFileEntity(path: s.path, title: s.title),
+                )
+                .toList(),
+          ),
+        )
         .toList();
   }
 }

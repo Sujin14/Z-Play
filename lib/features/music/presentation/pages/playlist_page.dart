@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/playlist_viewmodel.dart';
 import '../viewmodels/music_viewmodel.dart';
-import '../widgets/playlist_card.dart';
-import '../widgets/playlist_dialogs.dart';
+import '../widgets/favorites/loading_indicator.dart';
+import '../widgets/playlist/dialogs/create_edit_playlist_dialog.dart';
+import '../widgets/playlist/playlist_appbar.dart';
+import '../widgets/playlist/playlist_empty_view.dart';
+import '../widgets/playlist/playlist_grid.dart';
 import '../../../../constants/themes.dart';
 
 class PlaylistScreen extends StatelessWidget {
@@ -16,49 +19,46 @@ class PlaylistScreen extends StatelessWidget {
     final playlistVM = Provider.of<PlaylistViewModel>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Playlists',
-            style: style(
-                fontSize: hi / 30, color: theme.textTheme.bodyLarge!.color)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, size: 30),
-            onPressed: () {
-              final musicVM =
-                  Provider.of<MusicViewModel>(context, listen: false);
-
-              showCreateOrEditPlaylistDialog(
-                context: context,
-                playlistViewModel: playlistVM,
-                musicViewModel: musicVM,
-              );
+      extendBodyBehindAppBar: true,
+      appBar: PlaylistAppBar(hi: hi),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.gradientStart,
+              theme.colorScheme.gradientEnd,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Builder(
+            builder: (_) {
+              if (playlistVM.isLoading) {
+                return LoadingIndicator();
+              } else if (playlistVM.playlists.isEmpty) {
+                return PlaylistEmptyView(hi: hi);
+              } else {
+                return PlaylistGrid(playlists: playlistVM.playlists);
+              }
             },
           ),
-        ],
+        ),
       ),
-      body: playlistVM.isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-              color: theme.colorScheme.primary,
-            ))
-          : playlistVM.playlists.isEmpty
-              ? Center(
-                  child: Text('No playlists created yet!',
-                      style: style(
-                          fontSize: hi / 50, fontWeight: FontWeight.normal)),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(10),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.8,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: playlistVM.playlists.length,
-                  itemBuilder: (_, index) =>
-                      PlaylistCard(playlist: playlistVM.playlists[index]),
-                ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80),
+        child: FloatingActionButton(
+          onPressed: () {
+            final musicVM = Provider.of<MusicViewModel>(context, listen: false);
+            showCreateOrEditPlaylistDialog(
+              context: context,
+              playlistViewModel: playlistVM,
+              musicViewModel: musicVM,
+            );
+          },
+          backgroundColor: theme.colorScheme.primary,
+          child: const Icon(Icons.add),
+        ),
+      ),
     );
   }
 }
