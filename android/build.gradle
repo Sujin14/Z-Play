@@ -1,3 +1,5 @@
+import groovy.xml.XmlParser
+
 allprojects {
     repositories {
         google()
@@ -6,9 +8,54 @@ allprojects {
 }
 
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
+// Older Flutter plugins omit `namespace` and pin an old compileSdk.
+subprojects { project ->
+    project.plugins.withId("com.android.library") {
+        def android = project.extensions.findByName("android")
+        if (android == null) {
+            return
+        }
+        if (android.namespace == null || android.namespace.toString().isEmpty()) {
+            def packageName = project.group?.toString()
+            def manifest = project.file("src/main/AndroidManifest.xml")
+            if (manifest.exists()) {
+                def fromManifest = new XmlParser().parse(manifest).attribute("package")?.toString()
+                if (fromManifest) {
+                    packageName = fromManifest
+                }
+            }
+            if (packageName) {
+                android.namespace = packageName
+            }
+        }
+    }
+
+    project.afterEvaluate {
+        def android = project.extensions.findByName("android")
+        if (android == null) {
+            return
+        }
+        if (android.hasProperty("compileSdkVersion")) {
+            android.compileSdkVersion 36
+        }
+        if (android.hasProperty("compileOptions")) {
+            android.compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
+    }
+
+    project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
