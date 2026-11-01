@@ -38,7 +38,14 @@ class HelpContent {
     FaqItem(
       question: 'How do the sleep timer and playback speed work?',
       answer:
-          'Open Now Playing. Tap Sleep timer to pause playback after 15, 30, 45 or 60 minutes, or at the end of the current track. Tap the speed button (it shows the current speed, such as 1x) to play at 0.75x, 1x, 1.25x, 1.5x or 2x.',
+          'Open Now Playing. Tap Sleep timer to pause playback after 15, 30, 45 or 60 minutes, or at the end of the current track. Tap the speed button (it shows the current speed, such as 1x) to play at 0.75x, 1x, 1.25x, 1.5x or 2x. The sleep timer keeps running while the screen is off.',
+    ),
+    FaqItem(
+      question: 'Does music keep playing when I lock my phone?',
+      answer:
+          'Yes. $appName keeps playing when you lock your phone or open another app. You can control playback from the notification, which also has 10-second back and forward buttons, from the lock screen and with headset or Bluetooth buttons. To stop completely, pause playback and swipe the notification away.',
+      answerWithoutNotification:
+          'Yes. $appName keeps playing when you lock your iPhone or open another app. You can control playback from the lock screen and Control Center, and with headphone buttons. To stop completely, pause playback.',
     ),
     FaqItem(
       question: 'Does $appName collect my data or need the internet?',

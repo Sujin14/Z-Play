@@ -14,16 +14,22 @@ class HelpViewModel {
   final int? openIndex;
   final PlatformCapabilities capabilities;
 
-  List<FaqItem> get faqs {
-    if (capabilities.supportsFolders) return HelpContent.faqs;
-    return [
-      for (final faq in HelpContent.faqs)
-        if (!faq.aboutFolders)
-          FaqItem(
-            question: faq.question,
-            answer: faq.answerWithoutFolders ?? faq.answer,
-          ),
-    ];
+  // Each answer in the variant that matches what this platform has.
+  List<FaqItem> get faqs => [
+        for (final faq in HelpContent.faqs)
+          if (!faq.aboutFolders || capabilities.supportsFolders)
+            FaqItem(question: faq.question, answer: _answerFor(faq)),
+      ];
+
+  String _answerFor(FaqItem faq) {
+    if (!capabilities.supportsFolders && faq.answerWithoutFolders != null) {
+      return faq.answerWithoutFolders!;
+    }
+    if (!capabilities.hasPlaybackNotification &&
+        faq.answerWithoutNotification != null) {
+      return faq.answerWithoutNotification!;
+    }
+    return faq.answer;
   }
 
   String get email => supportEmail;

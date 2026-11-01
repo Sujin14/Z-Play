@@ -50,6 +50,9 @@ touch a repository, the store, the scanner or Hive.
      playlists resolve their songs against the library.
    - `library.onCatalogChanged = playlists.load`: playlists reload whenever a
      scan changes the library.
+   - `AudioService.init(builder: MediaSessionHandler.new, config: MediaSessionHandler.config)`
+     starts the media session first; after the player is built,
+     `session.attach(player)` connects them, so neither builds the other.
    - `PlayerViewModel(repository: libraryRepository, onPlayed: library.syncActivity, engine: JustAudioEngine())`:
      each play updates recently played and play counts.
 6. `AppInfoService` and `PlatformCapabilities` (plain `Provider`s) and the three view models
@@ -93,13 +96,23 @@ lib/
       app_info_service.dart       App version from pubspec.yaml ("1.0.0+3"), loaded at startup
       media_permission_service.dart  MediaPermissionService (interface) and the device version:
                                   asks for music access and waits for the answer
-      platform_capabilities.dart  PlatformCapabilities: supportsFolders (false on iOS)
+      platform_capabilities.dart  PlatformCapabilities: supportsFolders and
+                                  hasPlaybackNotification (both false on iOS)
       playback_engine.dart        PlaybackEngine (interface): a list of tracks the platform plays
                                   through by itself (setQueue, play, pause, stop, seek, seekToIndex,
                                   setSpeed, setRepeat, insert/remove/moveTrack, replaceAround;
                                   playing, position, duration, trackChanges, queueCompleted, errors)
       just_audio_engine.dart      JustAudioEngine: the only file that imports just_audio and
                                   audio_session (music session, file vs URL source)
+      playback_controls.dart      PlaybackControls (interface): what the media session may do
+                                  (resume, pause, next, previous, seek, seekBy) and read
+                                  (song, playing, duration, position, speed); PlayerViewModel
+                                  implements it
+      media_session_handler.dart  MediaSessionHandler (audio_service): Android notification and
+                                  media buttons → PlaybackControls; publishes MediaItem and
+                                  PlaybackState; holds the notification config
+      background_save_observer.dart  BackgroundSaveObserver: saves playback at once when the app
+                                  goes to the background or is detached (registered in main.dart)
     state/
       library_view_model.dart     Songs, search, sort, folders/albums/artists, favorites,
                                   history, settings, scanning
@@ -183,10 +196,16 @@ lib/
     not_found/    view/not_found_view.dart
 test/
   playback_queue_test.dart        Queue order, shuffle, repeat, play next
+  playback_store_test.dart        Saved playback state round trip in Hive; old saves load with
+                                  repeat and shuffle off
+  media_session_handler_test.dart MediaSessionHandler on FakePlaybackControls: actions, headset
+                                  buttons, controls and compact indices, MediaItem without
+                                  artwork, no republish on position ticks, swipe-away, config
   player_view_model_test.dart     PlayerViewModel on a FakePlaybackEngine: starts, the platform
                                   moving on, repeat, end of queue and play after it, queue edits
                                   and shuffle mirrored without a restart, both sleep modes, stale
-                                  starts, errors and skipping, restore, seekBy
+                                  starts, errors and skipping, restore (repeat, shuffle, old data),
+                                  seekBy, when saves happen and coalescing, swipe-away keeps state
   playlist_rename_test.dart       Rename, edit songs and duplicate names keep the playlist id
   hive_adapters_test.dart         Hive type ids and a playlist round trip from disk
   splash_view_model_test.dart     Opens only when animation and library are both done; failure,
@@ -201,9 +220,11 @@ test/
   splash_startup_test.dart        Cold start with the real LibraryViewModel: no build-phase error,
                                   splash hands over to the shell
   app_info_service_test.dart      Version formatting with a fake package info loader
-  help_content_test.dart          6 FAQs on Android, 5 on iOS; iOS answers never mention hidden
-                                  folders; no email address in lib/ outside support_contact.dart
-  info_page_model_test.dart       About shows the service's version; support email; last-updated dates
+  help_content_test.dart          7 FAQs on Android, 6 on iOS; iOS answers never mention hidden
+                                  folders; the background-playback FAQ and its iOS variant; no
+                                  email address in lib/ outside support_contact.dart
+  info_page_model_test.dart       About: the service's version and the What you can do list per platform;
+                                  Privacy and Terms background-playback text; support email; dates
   now_playing_route_test.dart     750ms each way; clip starts on the mini player rect, ends full
                                   screen, closes back onto it; content fade stagger; reduced
                                   motion uses the fade
@@ -279,10 +300,66 @@ Defined in `core/navigation/app_router.dart`. The router is the only file in
 - **`seekBy`** (for the 10-second skips): rewind stops at 0; forward stops
   `seekEndMargin` (50 ms) before the end so the song finishes by itself, and
   is ignored while the length is unknown.
+- **Saved playback state** (`PlaybackSnapshot`, `preferences` box, plain
+  keys): `queue` (playing order), `queueIndex`, `positionMs`, `speed`,
+  `queueOriginal` (the order before shuffling; empty when not shuffled),
+  `shuffle` and `repeat` (`off`, `all`, `one`). Saves from before the last
+  three load as shuffle off and repeat off. Restore rebuilds both orders
+  (`PlaybackQueue.restored`), keeps the saved song current even if earlier
+  songs are gone, and gives the engine the list, the loop mode and the
+  speed without playing.
+- **When it is saved:** at once on pause, a song change (by the app or the
+  platform), the end of the queue, every 5 s of playback, and when the app
+  goes to the background or is detached (`BackgroundSaveObserver`). Queue
+  edits, shuffle, repeat and speed changes are coalesced and written 300 ms
+  after the last one. Swiping the paused notification away pauses (which
+  saves) and never clears the saved state.
 - **Audio session:** `AudioSessionConfiguration.music()`. just_audio's own
   handling (`handleInterruptions`, on by default) pauses on a call or Siri
   and resumes afterwards only if it was playing, and pauses when headphones
   are unplugged.
+
+## Background playback (Android)
+
+audio_service runs a media playback foreground service while music plays.
+`MediaSessionHandler` (`core/services/`) is its `AudioHandler`; it talks to
+`PlayerViewModel` only through `PlaybackControls`.
+
+- **Notification:** title, artist and album; no artwork; the monochrome
+  `drawable/ic_notification` icon. Compact: previous, play/pause, next.
+  Expanded: rewind 10 s, previous, play/pause, next, forward 10 s. No close
+  button. Channel `com.sujin.musicplayer.playback` ("Playback"; audio_service
+  creates it at low importance, so no sound or vibration).
+- **Actions:** play → `resume`, pause, next, previous (3-second restart
+  rule), seek, forward/rewind → `seekBy(±10 s)`. Headset and Bluetooth
+  buttons arrive through the same media session (a single press toggles).
+- **State:** a `PlaybackState` (ready, playing or paused, position, speed)
+  is published whenever `PlayerViewModel` notifies: play/pause, a new song,
+  speed, and seeks (`seek` notifies for this). Position ticks are never
+  republished; the system advances the bar from the last position and the
+  speed.
+- **Stopping:** pausing takes the service out of the foreground
+  (`androidStopForegroundOnPause`), so the notification can be swiped away.
+  Swiping it away pauses and makes the session idle; the saved queue is kept
+  (it does not call `PlayerViewModel.stop()`, which would clear it).
+  Swiping the app out of recents leaves playback running.
+- **Android setup:** `MainActivity` extends `AudioServiceActivity`; the
+  manifest declares `WAKE_LOCK`, `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, audio_service's `AudioService`
+  (`foregroundServiceType="mediaPlayback"`) and `MediaButtonReceiver`.
+  `POST_NOTIFICATIONS` is not requested: media-session notifications are
+  exempt on Android 13+.
+  The release APK declares exactly: `READ_MEDIA_AUDIO`,
+  `READ_EXTERNAL_STORAGE` (maxSdkVersion 32), `WAKE_LOCK`,
+  `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, and androidx's
+  internal `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. No
+  `INTERNET` (only the debug and profile manifests add it, for development).
+  `ACCESS_NETWORK_STATE`, which ExoPlayer (media3, inside just_audio) merges
+  in, is removed with `tools:node="remove"`; media3 catches the
+  `SecurityException` and reports an unknown network type, which doesn't
+  matter for files on the device.
+- **Audio focus and unplugging** stay with just_audio and audio_session;
+  audio_service doesn't handle either.
 
 ## Now Playing transition
 
@@ -424,8 +501,12 @@ adaptive foreground to use there.
 - **Folders.** `PlatformCapabilities.supportsFolders` is false on iOS. View
   models read it: the Library has no Folders tab, Settings has no Hidden
   folders row (so `/hidden-folders` can't be reached), and Help leaves out
-  the folder question (5 FAQs instead of 6). FAQs whose answer mentions
+  the folder question (6 FAQs instead of 7). FAQs whose answer mentions
   folders carry an `answerWithoutFolders` that `HelpViewModel` shows instead.
+- **Playback notification.** `PlatformCapabilities.hasPlaybackNotification`
+  is false on iOS (controls live on the lock screen and in Control Center).
+  FAQs that describe the notification carry an `answerWithoutNotification`
+  for iOS, chosen by `HelpViewModel` the same way.
 - **iOS.** `SongScanner` reads the iOS music library through on_audio_query
   and skips the folder walk, because an iOS app only sees its own sandbox.
   Library items without an asset URL (cloud or DRM) are skipped. iOS song
@@ -477,7 +558,7 @@ boxes:
 | `favorites` | Favorite song paths |
 | `playlistsBox` | Playlists (`Playlist` with `MusicFile` songs) |
 | `playCountsBox` | Play count per song path |
-| `preferences` | Settings, recently played, and the saved queue with its position and speed |
+| `preferences` | Settings, recently played, and the saved playback state: queue, index, position, speed, original order, shuffle, repeat |
 | `recentlyPlayedBox` | Recently played from older versions; only read when `preferences` has no recent list yet |
 
 The Hive adapters in `core/models/*.g.dart` use type ids 0 (`MusicFile`) and

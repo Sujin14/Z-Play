@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/app/app_name.dart';
 import '../../../core/services/app_info_service.dart';
+import '../../../core/services/platform_capabilities.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/gradient_scaffold.dart';
 import '../model/info_page_model.dart';
@@ -17,7 +18,11 @@ class InfoView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final version = context.read<AppInfoService>().version;
-    final page = InfoPage.of(kind, version: version);
+    final page = InfoPage.of(
+      kind,
+      version: version,
+      capabilities: context.read<PlatformCapabilities>(),
+    );
     return GradientScaffold(
       body: SafeArea(
         bottom: false,

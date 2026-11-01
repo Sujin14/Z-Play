@@ -7,6 +7,7 @@ import '../models/music_file_model.dart';
 import '../models/playlist_model.dart';
 import '../models/song_model.dart';
 import '../models/playback_snapshot_model.dart';
+import '../models/repeat_mode_model.dart';
 
 class LibraryStore {
   LibraryStore({
@@ -172,22 +173,37 @@ class LibraryStore {
     await _preferencesBox.put('hiddenFolders', settings.hiddenFolders);
   }
 
+  // Saves from before repeat and shuffle were stored have no such keys and
+  // load as repeat off, shuffle off.
   PlaybackSnapshot playback() {
     final paths = _preferencesBox.get('queue');
+    final original = _preferencesBox.get('queueOriginal');
+    final repeat = _preferencesBox.get('repeat');
     return PlaybackSnapshot(
       paths: paths is List ? paths.cast<String>() : const [],
       index: _preferencesBox.get('queueIndex', defaultValue: 0) as int,
       positionMs: _preferencesBox.get('positionMs', defaultValue: 0) as int,
       speed:
           (_preferencesBox.get('speed', defaultValue: 1.0) as num).toDouble(),
+      originalPaths: original is List ? original.cast<String>() : const [],
+      shuffling: _preferencesBox.get('shuffle', defaultValue: false) == true,
+      repeat: RepeatMode.values.firstWhere(
+        (mode) => mode.name == repeat,
+        orElse: () => RepeatMode.off,
+      ),
     );
   }
 
   Future<void> savePlayback(PlaybackSnapshot snapshot) async {
-    await _preferencesBox.put('queue', snapshot.paths);
-    await _preferencesBox.put('queueIndex', snapshot.index);
-    await _preferencesBox.put('positionMs', snapshot.positionMs);
-    await _preferencesBox.put('speed', snapshot.speed);
+    await _preferencesBox.putAll({
+      'queue': snapshot.paths,
+      'queueIndex': snapshot.index,
+      'positionMs': snapshot.positionMs,
+      'speed': snapshot.speed,
+      'queueOriginal': snapshot.originalPaths,
+      'shuffle': snapshot.shuffling,
+      'repeat': snapshot.repeat.name,
+    });
   }
 
   Future<void> clearPlayback() async {

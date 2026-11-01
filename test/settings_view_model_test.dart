@@ -17,7 +17,10 @@ void main() {
       SettingsViewModel(
         LibraryViewModel(_UnusedRepository()),
         const AppInfoService(version: '1.0.0'),
-        PlatformCapabilities(supportsFolders: supportsFolders),
+        PlatformCapabilities(
+          supportsFolders: supportsFolders,
+          hasPlaybackNotification: supportsFolders,
+        ),
       );
 
   test('Rescan storage keeps the Android wording where folders exist', () {

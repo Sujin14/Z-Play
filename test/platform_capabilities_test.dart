@@ -6,13 +6,13 @@ import 'package:musicplayer/features/library/view_model/library_tabs_view_model.
 void main() {
   test('the Library has a Folders tab only where folders exist', () {
     expect(
-      LibraryTabsViewModel.tabsFor(
-          const PlatformCapabilities(supportsFolders: true)),
+      LibraryTabsViewModel.tabsFor(const PlatformCapabilities(
+          supportsFolders: true, hasPlaybackNotification: true)),
       LibraryTab.values,
     );
     expect(
-      LibraryTabsViewModel.tabsFor(
-          const PlatformCapabilities(supportsFolders: false)),
+      LibraryTabsViewModel.tabsFor(const PlatformCapabilities(
+          supportsFolders: false, hasPlaybackNotification: false)),
       [LibraryTab.songs, LibraryTab.albums, LibraryTab.artists],
     );
   });

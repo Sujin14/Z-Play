@@ -8,22 +8,26 @@ import 'package:musicplayer/features/help/model/help_content.dart';
 import 'package:musicplayer/features/help/view_model/help_view_model.dart';
 
 void main() {
-  List<String> answers({required bool supportsFolders}) => [
+  // Android has folders and a playback notification; iOS has neither.
+  List<String> answers({required bool android}) => [
         for (final faq in HelpViewModel(
           openIndex: null,
-          capabilities: PlatformCapabilities(supportsFolders: supportsFolders),
+          capabilities: PlatformCapabilities(
+            supportsFolders: android,
+            hasPlaybackNotification: android,
+          ),
         ).faqs)
           faq.answer.toLowerCase(),
       ];
 
-  test('Help lists 6 questions on Android and 5 on iOS', () {
-    expect(answers(supportsFolders: true), hasLength(6), reason: 'Android');
-    expect(answers(supportsFolders: false), hasLength(5),
+  test('Help lists 7 questions on Android and 6 on iOS', () {
+    expect(answers(android: true), hasLength(7), reason: 'Android');
+    expect(answers(android: false), hasLength(6),
         reason: 'iOS has no folder question');
   });
 
   test('iOS answers never mention hidden folders', () {
-    for (final answer in answers(supportsFolders: false)) {
+    for (final answer in answers(android: false)) {
       expect(answer, isNot(contains('hidden')));
       expect(answer, isNot(contains('folder')));
     }
@@ -33,12 +37,12 @@ void main() {
     final cloud = 'songs that are only in the cloud (for example apple music '
         'streaming or not downloaded to this iphone) cannot be played by '
         '${appName.toLowerCase()}, so download them to your device first.';
-    expect(answers(supportsFolders: false).first, contains(cloud));
-    expect(answers(supportsFolders: true).join(' '), isNot(contains(cloud)));
+    expect(answers(android: false).first, contains(cloud));
+    expect(answers(android: true).join(' '), isNot(contains(cloud)));
   });
 
   test('Android answers keep their folder text unchanged', () {
-    final android = answers(supportsFolders: true);
+    final android = answers(android: true);
     expect(android, [
       for (final faq in HelpContent.faqs) faq.answer.toLowerCase(),
     ]);
@@ -46,6 +50,63 @@ void main() {
       expect(android[index], contains('hidden'));
       expect(android[index], contains('folder'));
     }
+  });
+
+  group('background playback', () {
+    const question = 'Does music keep playing when I lock my phone?';
+    String answerTo(bool android) {
+      final faqs = HelpViewModel(
+        openIndex: null,
+        capabilities: PlatformCapabilities(
+          supportsFolders: android,
+          hasPlaybackNotification: android,
+        ),
+      ).faqs;
+      return faqs.singleWhere((faq) => faq.question == question).answer;
+    }
+
+    test('the question follows the sleep timer one on both platforms', () {
+      for (final android in [true, false]) {
+        final questions = [
+          for (final faq in HelpViewModel(
+            openIndex: null,
+            capabilities: PlatformCapabilities(
+              supportsFolders: android,
+              hasPlaybackNotification: android,
+            ),
+          ).faqs)
+            faq.question,
+        ];
+        final sleep = questions
+            .indexOf('How do the sleep timer and playback speed work?');
+        expect(questions[sleep + 1], question);
+      }
+    });
+
+    test('Android mentions the notification and its 10-second buttons', () {
+      final answer = answerTo(true);
+      expect(answer, contains('10-second back and forward buttons'));
+      expect(answer, contains('swipe the notification away'));
+    });
+
+    test('iOS mentions the lock screen and Control Center, not a notification',
+        () {
+      final answer = answerTo(false);
+      expect(answer, contains('lock your iPhone'));
+      expect(answer, contains('Control Center'));
+      expect(answer, isNot(contains('10-second')));
+      expect(answer, isNot(contains('notification')));
+    });
+
+    test('the sleep timer answer says it keeps running with the screen off',
+        () {
+      for (final android in [true, false]) {
+        expect(
+          answers(android: android).join(' '),
+          contains('the sleep timer keeps running while the screen is off.'),
+        );
+      }
+    });
   });
 
   test('no email address is written in lib/ outside the support constant', () {

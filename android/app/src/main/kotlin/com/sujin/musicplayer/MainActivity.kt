@@ -1,6 +1,7 @@
 package com.sujin.musicplayer
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity: FlutterActivity() {
+// Shares audio_service's Flutter engine, so playback can outlive the screen.
+class MainActivity: AudioServiceActivity() {
 }

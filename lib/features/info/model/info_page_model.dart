@@ -1,4 +1,5 @@
 import '../../../core/app/app_name.dart';
+import '../../../core/services/platform_capabilities.dart';
 import '../../../core/utils/support_contact.dart';
 
 enum InfoKind { about, privacy, terms }
@@ -49,10 +50,15 @@ class InfoPage {
   final List<InfoSection> sections;
   final String? lastUpdated;
 
-  // The About page shows the installed version, so it is built per call.
-  factory InfoPage.of(InfoKind kind, {required String version}) =>
+  // The About page shows the installed version and what this platform
+  // supports, so it is built per call.
+  factory InfoPage.of(
+    InfoKind kind, {
+    required String version,
+    required PlatformCapabilities capabilities,
+  }) =>
       switch (kind) {
-        InfoKind.about => _about(version),
+        InfoKind.about => _about(version, capabilities),
         InfoKind.privacy => _privacy,
         InfoKind.terms => _terms,
       };
@@ -60,45 +66,55 @@ class InfoPage {
 
 const _lastUpdated = 'Last updated: 1 November 2026';
 
-InfoPage _about(String version) => InfoPage(
+InfoPage _about(String version, PlatformCapabilities capabilities) => InfoPage(
       title: 'About $appName',
       sections: [
-        ..._aboutIntro,
+        _aboutIntro,
+        _whatYouCanDo(capabilities),
+        _aboutPrivacy,
         InfoSection(heading: 'Version', blocks: [InfoParagraph(version)]),
         ..._aboutOutro,
       ],
     );
 
-const _aboutIntro = [
-  InfoSection(
-    heading: appName,
-    blocks: [
-      InfoParagraph(
-          '$appName is a private, offline music player. It plays the music already stored on your device, with no account, no subscription and no internet connection required.'),
-    ],
-  ),
-  InfoSection(
-    heading: 'What you can do',
-    blocks: [
-      InfoBullets([
-        'Browse your library by songs, folders, albums and artists',
-        'Search your music instantly',
-        'Build playlists and mark favourites',
-        'Control playback with a queue, sleep timer and playback speed',
-        'Review recently played and most played songs',
-        'Hide folders you do not want in your library',
-        'Switch between dark and light themes',
-      ]),
-    ],
-  ),
-  InfoSection(
-    heading: 'Your privacy',
-    blocks: [
-      InfoParagraph(
-          'Your music and your data stay on your device. $appName does not collect, upload or share your information. Read the Privacy policy for details.'),
-    ],
-  ),
-];
+const _aboutIntro = InfoSection(
+  heading: appName,
+  blocks: [
+    InfoParagraph(
+        '$appName is a private, offline music player. It plays the music already stored on your device, with no account, no subscription and no internet connection required.'),
+  ],
+);
+
+// Folders and the playback notification only exist on Android, so the
+// iPhone list leaves them out.
+InfoSection _whatYouCanDo(PlatformCapabilities capabilities) => InfoSection(
+      heading: 'What you can do',
+      blocks: [
+        InfoBullets([
+          capabilities.supportsFolders
+              ? 'Browse your library by songs, folders, albums and artists'
+              : 'Browse your library by songs, albums and artists',
+          'Search your music instantly',
+          'Build playlists and mark favourites',
+          'Control playback with a queue, sleep timer and playback speed',
+          capabilities.hasPlaybackNotification
+              ? 'Keep music playing in the background, with notification and lock screen controls'
+              : 'Keep music playing in the background, with lock screen controls',
+          'Review recently played and most played songs',
+          if (capabilities.supportsFolders)
+            'Hide folders you do not want in your library',
+          'Switch between dark and light themes',
+        ]),
+      ],
+    );
+
+const _aboutPrivacy = InfoSection(
+  heading: 'Your privacy',
+  blocks: [
+    InfoParagraph(
+        'Your music and your data stay on your device. $appName does not collect, upload or share your information. Read the Privacy policy for details.'),
+  ],
+);
 
 const _aboutOutro = [
   InfoSection(
@@ -150,9 +166,12 @@ const _privacy = InfoPage(
       blocks: [
         InfoBullets([
           'Audio / music access: needed to find and play the music stored on your device. On newer versions of Android this appears as permission to access music and audio; on older versions it appears as storage access. On iPhone this appears as Media and Apple Music access. The app uses this permission only to list and play your audio files and does not read your photos, videos, contacts, location, camera or microphone.',
+          'Background playback: To keep your music playing when the screen is off or you switch to another app, $appName uses your device\'s standard media playback features. On Android this is a media playback service with a playback notification, and it uses the foreground service and wake lock permissions that Android grants automatically, without asking you. On iPhone it uses the audio background mode. This does not give the app access to any additional data.',
         ]),
         InfoParagraph(
-            'You can withdraw this permission at any time in your device\'s Settings. The app will then be unable to show your music.'),
+            '$appName does not ask for permission to send notifications. The playback notification and lock screen controls only show the song that is playing and the playback buttons.'),
+        InfoParagraph(
+            'You can withdraw audio access at any time in your device\'s Settings. The app will then be unable to show your music.'),
       ],
     ),
     InfoSection(
@@ -245,6 +264,8 @@ const _terms = InfoPage(
       blocks: [
         InfoParagraph(
             'The app needs permission to access audio files on your device to work. You can change this permission in your device settings at any time. Without it, the app cannot show or play your music.'),
+        InfoParagraph(
+            'On Android, $appName runs a media playback service while music is playing so playback can continue in the background; you can stop it by pausing playback and dismissing the notification.'),
       ],
     ),
     InfoSection(

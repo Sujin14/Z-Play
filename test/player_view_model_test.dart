@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musicplayer/core/data/library_repository.dart';
 import 'package:musicplayer/core/models/playback_snapshot_model.dart';
 import 'package:musicplayer/core/models/repeat_mode_model.dart';
 import 'package:musicplayer/core/models/song_model.dart';
+import 'package:musicplayer/core/services/background_save_observer.dart';
+import 'package:musicplayer/core/services/media_session_handler.dart';
 import 'package:musicplayer/core/state/player_view_model.dart';
 
 import 'support/fake_playback_engine.dart';
@@ -17,16 +20,23 @@ class _MemoryRepository implements LibraryRepository {
   PlaybackSnapshot saved = PlaybackSnapshot.empty;
   final List<Song> known;
   final plays = <String>[];
+  int saves = 0;
+  bool cleared = false;
 
   @override
   PlaybackSnapshot playback() => saved;
 
   @override
-  Future<void> savePlayback(PlaybackSnapshot snapshot) async =>
-      saved = snapshot;
+  Future<void> savePlayback(PlaybackSnapshot snapshot) async {
+    saves++;
+    saved = snapshot;
+  }
 
   @override
-  Future<void> clearPlayback() async => saved = PlaybackSnapshot.empty;
+  Future<void> clearPlayback() async {
+    cleared = true;
+    saved = PlaybackSnapshot.empty;
+  }
 
   @override
   Future<void> recordPlay(Song song) async => plays.add(song.path);
@@ -384,7 +394,8 @@ void main() {
 
       await player.prepare();
 
-      expect(engine.calls, ['configure', 'speed:1.25', 'setQueue:1@42000']);
+      expect(engine.calls,
+          ['configure', 'speed:1.25', 'setQueue:1@42000', 'repeat:off']);
       expect(player.current, _b);
       expect(player.position.value, const Duration(seconds: 42));
       expect(player.isPlaying, isFalse);
@@ -487,6 +498,154 @@ void main() {
       expect(player.isPlaying, isFalse);
       expect(player.current, _a);
       expect(player.position.value, Duration.zero);
+    });
+  });
+
+  group('saved repeat and shuffle', () {
+    const all = [_a, _b, _c, _d];
+
+    PlayerViewModel restoredFrom(
+            _MemoryRepository saved, FakePlaybackEngine e) =>
+        PlayerViewModel(repository: saved, onPlayed: () async {}, engine: e);
+
+    test('round-trip through a restart, and shuffle off restores the order',
+        () async {
+      final saved = _MemoryRepository(known: all);
+      final first = restoredFrom(saved, engine);
+      await first.play(_b, queue: all, index: 1);
+      first
+        ..cycleRepeat()
+        ..toggleShuffle();
+      await first.saveNow();
+      final shuffledOrder = pathsOf(first.upNext);
+
+      final again = FakePlaybackEngine();
+      final restored = restoredFrom(saved, again);
+      await restored.prepare();
+
+      expect(restored.repeatMode, RepeatMode.all);
+      expect(restored.shuffling, isTrue);
+      expect(pathsOf(restored.upNext), shuffledOrder);
+      expect(restored.current, _b);
+      expect(again.paths, shuffledOrder);
+      expect(again.calls, contains('repeat:all'));
+      expect(again.calls, isNot(contains('play')));
+      expect(restored.isPlaying, isFalse);
+
+      restored.toggleShuffle();
+      expect(restored.shuffling, isFalse);
+      expect(pathsOf(restored.upNext), pathsOf(all));
+      expect(restored.current, _b);
+
+      first.dispose();
+      restored.dispose();
+    });
+
+    test('saves from before repeat and shuffle restore with both off',
+        () async {
+      repository.saved = PlaybackSnapshot(
+        paths: pathsOf(_songs),
+        index: 2,
+        positionMs: 0,
+        speed: 1,
+      );
+
+      await player.prepare();
+
+      expect(player.repeatMode, RepeatMode.off);
+      expect(player.shuffling, isFalse);
+      expect(player.current, _c);
+      expect(engine.calls, contains('repeat:off'));
+      expect(engine.calls, isNot(contains('play')));
+    });
+
+    test('the saved song stays current when earlier songs are gone', () async {
+      repository.saved = PlaybackSnapshot(
+        paths: [_d.path, ..._songs.map((song) => song.path)],
+        index: 2,
+        positionMs: 0,
+        speed: 1,
+      );
+
+      await player.prepare();
+
+      expect(player.current, _b, reason: 'd is not in the library any more');
+    });
+  });
+
+  group('when playback is saved', () {
+    test('pause saves at once', () async {
+      await startAt(0);
+      final before = repository.saves;
+
+      await player.pause();
+
+      expect(repository.saves, before + 1);
+    });
+
+    test('a song change saves at once', () async {
+      await startAt(0);
+
+      engine.advanceTo(1);
+      await pumpEventQueue();
+
+      expect(repository.saved.index, 1);
+    });
+
+    testWidgets('rapid queue edits are written once, 300 ms later',
+        (tester) async {
+      repository = _MemoryRepository(known: [..._songs, _d]);
+      player = PlayerViewModel(
+          repository: repository, onPlayed: () async {}, engine: engine);
+      await startAt(0);
+      final before = repository.saves;
+
+      player
+        ..addToQueue(_d)
+        ..reorderQueue(3, 1)
+        ..playNext(_c)
+        ..cycleRepeat()
+        ..toggleShuffle();
+      await tester.pump(const Duration(milliseconds: 299));
+      expect(repository.saves, before);
+
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(repository.saves, before + 1);
+      expect(pathsOf(player.upNext), repository.saved.paths);
+      expect(repository.saved.repeat, RepeatMode.all);
+      expect(repository.saved.shuffling, isTrue);
+    });
+
+    test('going to the background saves at once', () async {
+      await startAt(0);
+      final observer = BackgroundSaveObserver(player.saveNow);
+      final before = repository.saves;
+
+      observer.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      observer.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(repository.saves, before);
+
+      observer.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await pumpEventQueue();
+      expect(repository.saves, before + 1);
+
+      observer.didChangeAppLifecycleState(AppLifecycleState.detached);
+      await pumpEventQueue();
+      expect(repository.saves, before + 2);
+    });
+
+    test('swiping the paused notification away keeps the saved queue',
+        () async {
+      await startAt(1);
+      final session = MediaSessionHandler()..attach(player);
+
+      await session.onNotificationDeleted();
+
+      expect(repository.cleared, isFalse);
+      expect(repository.saved.paths, pathsOf(_songs));
+      expect(repository.saved.index, 1);
+      expect(engine.calls, contains('pause'));
     });
   });
 }

@@ -74,8 +74,8 @@ void main() {
   LibraryTabsViewModel tabsFor(LibraryViewModel library) =>
       LibraryTabsViewModel(
         library,
-        tabs: LibraryTabsViewModel.tabsFor(
-            const PlatformCapabilities(supportsFolders: true)),
+        tabs: LibraryTabsViewModel.tabsFor(const PlatformCapabilities(
+            supportsFolders: true, hasPlaybackNotification: true)),
         selectedTab: 0,
       );
 

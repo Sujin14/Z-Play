@@ -14,12 +14,32 @@ class PlaybackQueue {
     index = startIndex.clamp(0, _order.length - 1);
   }
 
+  // A queue saved while shuffled: order is what plays, original is the
+  // order shuffle off returns to. If the two don't hold the same songs (a
+  // song was deleted from one side, or old data), the original order is
+  // taken to be the playing order.
+  PlaybackQueue.restored({
+    required List<Song> order,
+    required List<Song> original,
+    required bool shuffled,
+    int startIndex = 0,
+  })  : _base = _sameSongs(order, original)
+            ? List<Song>.of(original)
+            : List<Song>.of(order),
+        _order = List<Song>.of(order),
+        shuffling = shuffled {
+    index = _order.isEmpty ? 0 : startIndex.clamp(0, _order.length - 1);
+  }
+
   List<Song> _base;
   List<Song> _order;
   int index = 0;
   bool shuffling = false;
 
   List<Song> get songs => List.unmodifiable(_order);
+
+  // The order before shuffling; the same as songs while shuffle is off.
+  List<Song> get originalSongs => List.unmodifiable(_base);
 
   Song? get current => _order.isEmpty ? null : _order[index];
 
@@ -134,6 +154,12 @@ class PlaybackQueue {
     final baseIndex = _base.indexWhere((item) => item.path == currentPath);
     final insertAt = baseIndex < 0 ? _base.length : baseIndex + 1;
     _base.insert(insertAt, song);
+  }
+
+  static bool _sameSongs(List<Song> a, List<Song> b) {
+    if (a.length != b.length) return false;
+    final paths = {for (final song in a) song.path};
+    return b.every((song) => paths.contains(song.path));
   }
 
   int _indexOf(String? path, List<Song> songs) {

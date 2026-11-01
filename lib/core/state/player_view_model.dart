@@ -7,6 +7,7 @@ import '../models/playback_track_model.dart';
 import '../models/song_model.dart';
 import '../data/library_repository.dart';
 import '../models/track_change_model.dart';
+import '../services/playback_controls.dart';
 import '../services/playback_engine.dart';
 import 'playback_queue.dart';
 import '../models/playback_snapshot_model.dart';
@@ -15,7 +16,7 @@ import '../models/repeat_mode_model.dart';
 // PlaybackQueue decides the order; the engine holds a mirror of it and moves
 // to the next track by itself. Every queue change is applied to the queue
 // first and then copied to the engine without restarting the current song.
-class PlayerViewModel extends ChangeNotifier {
+class PlayerViewModel extends ChangeNotifier implements PlaybackControls {
   PlayerViewModel({
     required LibraryRepository repository,
     required Future<void> Function() onPlayed,
@@ -29,13 +30,17 @@ class PlayerViewModel extends ChangeNotifier {
   final LibraryRepository _repository;
   final Future<void> Function() _onPlayed;
   final PlaybackEngine _engine;
+  @override
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
 
   PlaybackQueue _queue = PlaybackQueue(songs: const []);
   RepeatMode repeatMode = RepeatMode.off;
+  @override
   bool isPlaying = false;
   bool stopAfterCurrent = false;
+  @override
   Duration duration = Duration.zero;
+  @override
   double speed = 1;
   String? error;
   DateTime? sleepUntil;
@@ -54,10 +59,15 @@ class PlayerViewModel extends ChangeNotifier {
   int _lastSavedSecond = -1;
   int _failures = 0;
   Timer? _sleepTimer;
+  Timer? _saveTimer;
+  // Rapid edits (a drag through the queue, several "add to queue") are
+  // written once, this long after the last one.
+  static const _saveDelay = Duration(milliseconds: 300);
   final List<StreamSubscription<Object?>> _subscriptions = [];
 
   PlaybackQueue get queue => _queue;
 
+  @override
   Song? get current => _queue.current;
 
   List<Song> get upNext => _queue.songs;
@@ -131,12 +141,20 @@ class PlayerViewModel extends ChangeNotifier {
     await _startCurrent(countPlay: false, from: position.value);
   }
 
+  // Play from the media session: does nothing while already playing.
+  @override
+  Future<void> resume() async {
+    if (!isPlaying) await toggle();
+  }
+
+  @override
   Future<void> pause() async {
     _wantsPlay = false;
     await _engine.pause();
-    await _persist();
+    await saveNow();
   }
 
+  @override
   Future<void> next() async {
     if (!_queue.skipNext(repeatMode)) {
       await pause();
@@ -153,6 +171,7 @@ class PlayerViewModel extends ChangeNotifier {
   // iOS, where AVFoundation reports the end when playback reaches it.
   static const seekEndMargin = Duration(milliseconds: 50);
 
+  @override
   Future<void> previous() async {
     if (position.value > _restartThreshold) {
       await seek(Duration.zero);
@@ -165,15 +184,20 @@ class PlayerViewModel extends ChangeNotifier {
     await _startCurrent(countPlay: true);
   }
 
+  // Notifies so the media session republishes the new position; ordinary
+  // position ticks only update the position notifier.
+  @override
   Future<void> seek(Duration value) async {
     await _engine.seek(value);
     position.value = value;
+    notifyListeners();
   }
 
   // Skips within the song; negative rewinds. Rewind stops at 0. Forward
   // stops just short of the end so the song finishes and the queue moves on
   // as usual (repeat and the "end of track" timer included), and is ignored
   // while the song's length is unknown.
+  @override
   Future<void> seekBy(Duration delta) async {
     if (current == null) return;
     var target = position.value + delta;
@@ -199,7 +223,7 @@ class PlayerViewModel extends ChangeNotifier {
     }
     notifyListeners();
     _mirrorAround();
-    _persist();
+    _saveSoon();
   }
 
   void cycleRepeat() {
@@ -210,6 +234,7 @@ class PlayerViewModel extends ChangeNotifier {
     };
     notifyListeners();
     if (!stopAfterCurrent) _engine.setRepeat(repeatMode);
+    _saveSoon();
   }
 
   void playNext(Song song) {
@@ -219,7 +244,7 @@ class PlayerViewModel extends ChangeNotifier {
     _queue.playNext(song);
     notifyListeners();
     _mirrorAround();
-    _persist();
+    _saveSoon();
   }
 
   void addToQueue(Song song) {
@@ -230,7 +255,7 @@ class PlayerViewModel extends ChangeNotifier {
     if (_loaded && !stopAfterCurrent) {
       _engine.insertTrack(before, _trackFor(song));
     }
-    _persist();
+    _saveSoon();
   }
 
   void removeFromQueue(int index) {
@@ -246,7 +271,7 @@ class PlayerViewModel extends ChangeNotifier {
     } else if (_loaded && !stopAfterCurrent) {
       _engine.removeTrack(index);
     }
-    _persist();
+    _saveSoon();
   }
 
   void reorderQueue(int oldIndex, int newIndex) {
@@ -256,14 +281,14 @@ class PlayerViewModel extends ChangeNotifier {
     if (_loaded && !stopAfterCurrent && oldIndex != target) {
       _engine.moveTrack(oldIndex, target);
     }
-    _persist();
+    _saveSoon();
   }
 
   Future<void> setSpeed(double value) async {
     speed = value;
     await _engine.setSpeed(value);
     notifyListeners();
-    await _persist();
+    _saveSoon();
   }
 
   void startSleepTimer(Duration duration) {
@@ -300,6 +325,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _saveTimer?.cancel();
     _playToken++;
     _wantsPlay = false;
     await _engine.stop();
@@ -313,25 +339,40 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Loads the saved queue into the engine without playing it.
+  // Loads the saved queue (playing order and, if shuffled, the original
+  // order), repeat and position into the engine without playing it. Songs
+  // no longer in the library are dropped; the saved song stays current if
+  // it is still there.
   Future<void> restore() async {
     final snapshot = _repository.playback();
     speed = snapshot.speed;
-    final songs = [
-      for (final path in snapshot.paths)
-        if (_repository.songByPath(path) != null) _repository.songByPath(path)!,
-    ];
-    if (songs.isEmpty) return;
-    _queue = PlaybackQueue(
-      songs: songs,
-      startIndex: snapshot.index.clamp(0, songs.length - 1),
+    final order = _songsAt(snapshot.paths);
+    if (order.isEmpty) return;
+    final original = _songsAt(snapshot.originalPaths);
+    final savedPath =
+        snapshot.index >= 0 && snapshot.index < snapshot.paths.length
+            ? snapshot.paths[snapshot.index]
+            : null;
+    final found = order.indexWhere((song) => song.path == savedPath);
+    _queue = PlaybackQueue.restored(
+      order: order,
+      original: original.isEmpty ? order : original,
+      shuffled: snapshot.shuffling,
+      startIndex: found >= 0 ? found : snapshot.index,
     );
+    repeatMode = snapshot.repeat;
     final resumeAt = Duration(milliseconds: snapshot.positionMs);
     position.value = resumeAt;
     notifyListeners();
     _loaded = await _engine.setQueue(_engineTracks,
         index: _engineIndex, position: resumeAt);
+    await _engine.setRepeat(repeatMode);
   }
+
+  List<Song> _songsAt(List<String> paths) => [
+        for (final path in paths)
+          if (_repository.songByPath(path) case final song?) song,
+      ];
 
   static PlaybackTrack _trackFor(Song song) => PlaybackTrack(
       path: song.path, isUrl: song.path.startsWith(_iosLibraryScheme));
@@ -374,7 +415,7 @@ class PlayerViewModel extends ChangeNotifier {
       await _onPlayed();
     }
     notifyListeners();
-    await _persist();
+    await saveNow();
     return true;
   }
 
@@ -428,7 +469,7 @@ class PlayerViewModel extends ChangeNotifier {
         if (value > Duration.zero) _failures = 0;
         if (value.inSeconds != _lastSavedSecond && value.inSeconds % 5 == 0) {
           _lastSavedSecond = value.inSeconds;
-          _persist();
+          saveNow();
         }
       }),
       _engine.durationChanges.listen((value) {
@@ -455,7 +496,7 @@ class PlayerViewModel extends ChangeNotifier {
       await _repository.recordPlay(song);
       await _onPlayed();
     }
-    await _persist();
+    await saveNow();
   }
 
   Future<void> _handleQueueCompleted() async {
@@ -467,13 +508,13 @@ class PlayerViewModel extends ChangeNotifier {
       _disarmEndOfTrack();
       await seek(Duration.zero);
       notifyListeners();
-      await _persist();
+      await saveNow();
       return;
     }
     _ended = true;
     position.value = Duration.zero;
     notifyListeners();
-    await _persist();
+    await saveNow();
   }
 
   // Errors while a song plays, or right after the platform moved to the
@@ -492,7 +533,11 @@ class PlayerViewModel extends ChangeNotifier {
     _skipFailed(current!);
   }
 
-  Future<void> _persist() async {
+  // Writes the queue, both orders when shuffled, the position, speed,
+  // repeat and shuffle at once, dropping any save still waiting.
+  Future<void> saveNow() async {
+    _saveTimer?.cancel();
+    _saveTimer = null;
     final song = current;
     if (song == null) return;
     await _repository.savePlayback(
@@ -501,13 +546,24 @@ class PlayerViewModel extends ChangeNotifier {
         index: _queue.index,
         positionMs: position.value.inMilliseconds,
         speed: speed,
+        originalPaths: _queue.shuffling
+            ? [for (final item in _queue.originalSongs) item.path]
+            : const [],
+        shuffling: _queue.shuffling,
+        repeat: repeatMode,
       ),
     );
+  }
+
+  void _saveSoon() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, saveNow);
   }
 
   @override
   void dispose() {
     _sleepTimer?.cancel();
+    _saveTimer?.cancel();
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }

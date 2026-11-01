@@ -86,6 +86,14 @@ stays the single source of truth.
   - `FOREGROUND_SERVICE_MEDIA_PLAYBACK` (Android 14+);
   - All three are install-time permissions with no dialog.
     `POST_NOTIFICATIONS` is **not** requested (decision 4).
+  - Final release permission list (checked with `aapt dump permissions` on
+    the release APK after step 4): `READ_MEDIA_AUDIO`,
+    `READ_EXTERNAL_STORAGE` (maxSdkVersion 32), `WAKE_LOCK`,
+    `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, plus androidx's
+    internal `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. No `INTERNET`.
+    ExoPlayer's `ACCESS_NETWORK_STATE` is removed in the app manifest
+    (`tools:node="remove"`); media3 handles its absence (caught
+    `SecurityException`, unknown network type).
 - `<service android:name="com.ryanheise.audioservice.AudioService"
   android:foregroundServiceType="mediaPlayback" android:exported="true">`
   with the `android.media.browse.MediaBrowserService` intent filter.
@@ -311,10 +319,10 @@ uninstalling.
 | 1 ✅ done | Extract `PlaybackEngine`; move today's audioplayers code into `AudioplayersEngine`; `PlayerViewModel` uses the interface. Add `FakePlaybackEngine` and the first `PlayerViewModel` tests (completion, end of track, repeat one, counts). No behavior change. | Everything plays exactly as before. | Low / M |
 | 2 ✅ done | Add just_audio; `JustAudioEngine` with a native playlist mirroring `PlaybackQueue`, loop mode, speed, `seekBy` with clamping, queue edits, the end-of-track trim, play counts on index changes. Switch `PlayerViewModel` to it (adding `seekBy`); keep `AudioplayersEngine` until verified. Tests: the `seekBy` cases listed in section 5. | Android and iOS: play, next/previous (3-second restart rule), gapless, repeat all/one, shuffle on/off mid-song, queue edits during playback, speed, both sleep modes, iOS `ipod-library` songs. | Medium-high / L |
 | 3 ✅ done (audioplayers and `AudioplayersEngine` removed; audio session set to music; interruptions and unplugging use just_audio's defaults. Left: confirm the focus, call and unplug behavior on devices) | Remove audioplayers and `AudioplayersEngine`; configure audio_session (music); interruption and becoming-noisy handling. | Headphones unplugged pause playback; a call pauses and then resumes; another app taking audio pauses ours. | Medium / S |
-| 4 | Android background: audio_service (`ZPlayAudioHandler` with rewind/fastForward → `seekBy(∓10 s)`, `PlaybackControls`), `AudioServiceActivity`, manifest service, receiver and permissions, notification channel and icon, the compact (3) and expanded (5) actions, `AudioService.init` in `main.dart`. Tests: handler rewind/forward call `seekBy`. | Screen off for 10+ min keeps playing; compact and expanded notification buttons, including ±10 s; headset and Bluetooth buttons; swipe the app away; swipe away the paused notification stops the service; the sleep timer with the screen off keeps the notification; Android 13+ with notifications denied. | Medium-high / L |
+| 4 ✅ done (code and setup; device checks still to do) | Android background: audio_service (`ZPlayAudioHandler` with rewind/fastForward → `seekBy(∓10 s)`, `PlaybackControls`), `AudioServiceActivity`, manifest service, receiver and permissions, notification channel and icon, the compact (3) and expanded (5) actions, `AudioService.init` in `main.dart`. Tests: handler rewind/forward call `seekBy`. | Screen off for 10+ min keeps playing; compact and expanded notification buttons, including ±10 s; headset and Bluetooth buttons; swipe the app away; swipe away the paused notification stops the service; the sleep timer with the screen off keeps the notification; Android 13+ with notifications denied. | Medium-high / L |
 | 5 | iOS background: `UIBackgroundModes audio`, Now Playing and remote commands (play, pause, toggle, next, previous, change position; no skip-interval commands) through the same handler. | Lock screen and Control Center show next/previous and the seek bar; AirPods double-tap; a call and Siri interrupting (resumes only if it was playing); `ipod-library` songs advancing while locked. Needs a Mac and an iPhone. | Medium / M |
-| 6 | State restore hardening: save on pause and track change; save and restore repeat and shuffle; restore after the process is killed. | Pause, background for an hour, force-kill, reopen: same song, position, repeat and shuffle. | Low / S |
-| 7 | Privacy, Terms and Help text plus tests (the FAQ counts change). | Read the pages on both platforms. | Low / S |
+| 6 ✅ done (device checks still to do) | State restore hardening: save on pause and track change; save and restore repeat and shuffle; restore after the process is killed. | Pause, background for an hour, force-kill, reopen: same song, position, repeat and shuffle. | Low / S |
+| 7 ✅ done (the iPhone sentences become true with step 5) | Privacy, Terms and Help text plus tests (the FAQ counts change). | Read the pages on both platforms. | Low / S |
 | 8 | Store prep: Play foreground service declaration and video, Data safety review, App Store review notes. | Internal testing track and TestFlight builds. | Low / S |
 
 Note: an in-app 10-second control on Now Playing is a separate small UI
