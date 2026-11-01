@@ -12,6 +12,8 @@ import 'package:musicplayer/core/data/playlist_repository.dart';
 import 'package:musicplayer/core/state/library_view_model.dart';
 import 'package:musicplayer/core/state/playlist_view_model.dart';
 
+import 'support/fake_media_permission_service.dart';
+
 void main() {
   late Directory dir;
   late PlaylistViewModel playlists;
@@ -32,8 +34,10 @@ void main() {
       playCountBox: await Hive.openBox<int>('playCountsBox'),
       preferencesBox: await Hive.openBox('preferences'),
     );
-    final library = LibraryViewModel(
-        LibraryRepository(store: store, scanner: SongScanner()));
+    final library = LibraryViewModel(LibraryRepository(
+        store: store,
+        scanner: SongScanner(),
+        permissions: FakeMediaPermissionService()));
     playlists = PlaylistViewModel(
         repository: PlaylistRepository(store), library: library);
     await playlists.create('Gym', const []);

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/app/app_name.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/navigation/navigation_service.dart';
+import '../../../core/services/app_info_service.dart';
+import '../../../core/services/platform_capabilities.dart';
 import '../../../core/state/library_view_model.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../view_model/settings_view_model.dart';
 import '../widgets/chevron_icon.dart';
-import '../widgets/hidden_folders_section.dart';
 import '../widgets/setting_row.dart';
 import '../widgets/settings_card.dart';
 import '../widgets/settings_footer.dart';
@@ -19,7 +21,11 @@ class SettingsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = SettingsViewModel(context.watch<LibraryViewModel>());
+    final settings = SettingsViewModel(
+      context.watch<LibraryViewModel>(),
+      context.read<AppInfoService>(),
+      context.read<PlatformCapabilities>(),
+    );
     final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
@@ -32,7 +38,7 @@ class SettingsView extends StatelessWidget {
             24 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            Text('Z-PLAY', style: text.labelSmall),
+            Text(appName.toUpperCase(), style: text.labelSmall),
             const SizedBox(height: 4),
             Text('Settings', style: text.headlineLarge),
             const SettingsSectionLabel('Appearance'),
@@ -69,15 +75,20 @@ class SettingsView extends StatelessWidget {
               SettingRow(
                 icon: Icons.refresh_rounded,
                 title: 'Rescan storage',
-                subtitle:
-                    'Read every mounted volume and the system music index again.',
+                subtitle: settings.rescanSubtitle,
                 trailing: const ChevronIcon(),
                 onTap: settings.rescan,
               ),
+              if (settings.showsHiddenFolders)
+                SettingRow(
+                  icon: Icons.visibility_off_outlined,
+                  title: 'Hidden folders',
+                  subtitle: settings.hiddenFoldersSummary,
+                  trailing: const ChevronIcon(),
+                  onTap: () =>
+                      NavigationService.pushNamed(AppRoutes.hiddenFolders),
+                ),
             ]),
-            if (settings.hasHiddenFolders)
-              HiddenFoldersSection(
-                  folders: settings.hiddenFolders, onShow: settings.showFolder),
             const SettingsSectionLabel('Listening history'),
             SettingsCard(children: [
               SettingRow(
@@ -95,6 +106,12 @@ class SettingsView extends StatelessWidget {
             ]),
             const SettingsSectionLabel('About'),
             SettingsCard(children: [
+              SettingRow(
+                icon: Icons.help_outline_rounded,
+                title: 'Help & FAQ',
+                trailing: const ChevronIcon(),
+                onTap: () => NavigationService.pushNamed(AppRoutes.help),
+              ),
               SettingRow(
                 icon: Icons.info_outline_rounded,
                 title: 'About',
@@ -115,7 +132,7 @@ class SettingsView extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 32),
-            const SettingsFooter(version: SettingsViewModel.version),
+            SettingsFooter(version: settings.version),
           ],
         ),
       ),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../core/app/app_name.dart';
+import '../../../core/services/app_info_service.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/gradient_scaffold.dart';
 import '../model/info_page_model.dart';
@@ -13,7 +16,8 @@ class InfoView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final page = InfoPage.of(kind);
+    final version = context.read<AppInfoService>().version;
+    final page = InfoPage.of(kind, version: version);
     return GradientScaffold(
       body: SafeArea(
         bottom: false,
@@ -25,10 +29,20 @@ class InfoView extends StatelessWidget {
             24 + MediaQuery.paddingOf(context).bottom,
           ),
           children: [
-            InfoHeader(title: page.title),
+            InfoHeader(title: page.title, lastUpdated: page.lastUpdated),
             const SizedBox(height: 24),
             for (final section in page.sections) ...[
-              InfoSectionCard(section: section),
+              InfoSectionCard(
+                section: section,
+                onAction: switch (section.action) {
+                  InfoAction.licenses => () => showLicensePage(
+                        context: context,
+                        applicationName: appName,
+                        applicationVersion: version,
+                      ),
+                  null => null,
+                },
+              ),
               const SizedBox(height: 14),
             ],
           ],

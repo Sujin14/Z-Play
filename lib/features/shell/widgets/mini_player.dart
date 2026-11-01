@@ -2,12 +2,13 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/navigation/mini_player_anchor.dart';
 import '../../../core/state/player_view_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_tokens.dart';
-import '../../../core/widgets/cover_art.dart';
+import '../../../core/widgets/cover_hero.dart';
 import '../../../core/widgets/marquee_text.dart';
 
 // Renders nothing when no song is loaded.
@@ -27,7 +28,9 @@ class MiniPlayer extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final text = Theme.of(context).textTheme;
     final radius = BorderRadius.circular(AppRadii.miniPlayer);
+    // The key lets Now Playing find this rect to grow from and land on.
     return ClipRRect(
+      key: MiniPlayerAnchor.key,
       borderRadius: radius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: _blur, sigmaY: _blur),
@@ -45,7 +48,7 @@ class MiniPlayer extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
                   child: Row(
                     children: [
-                      CoverArt(
+                      CoverHero(
                           seed: song.title,
                           size: AppSizes.smallCover,
                           radius: AppRadii.small),

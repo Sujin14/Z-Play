@@ -5,7 +5,7 @@ import '../../../core/models/song_model.dart';
 import '../../../core/state/player_view_model.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radii.dart';
-import '../../../core/widgets/cover_art.dart';
+import '../../../core/widgets/cover_hero.dart';
 
 class NowPlayingCover extends StatefulWidget {
   const NowPlayingCover(
@@ -35,6 +35,10 @@ class _NowPlayingCoverState extends State<NowPlayingCover>
   static const double _glowBlur = 60;
   static const double _glowSpread = -6;
   static const Offset _glowOffset = Offset(0, 16);
+  // The Lottie shows once the flying cover has landed under it.
+  static const _lottieReveal = Interval(0.8, 1);
+
+  CurvedAnimation? _lottieFade;
 
   @override
   void initState() {
@@ -64,8 +68,20 @@ class _NowPlayingCoverState extends State<NowPlayingCover>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final routeAnimation = ModalRoute.of(context)?.animation;
+    if (routeAnimation == null || _lottieFade?.parent == routeAnimation) {
+      return;
+    }
+    _lottieFade?.dispose();
+    _lottieFade = CurvedAnimation(parent: routeAnimation, curve: _lottieReveal);
+  }
+
+  @override
   void dispose() {
     widget.player.removeListener(_syncLottie);
+    _lottieFade?.dispose();
     _lottie.dispose();
     super.dispose();
   }
@@ -88,20 +104,29 @@ class _NowPlayingCoverState extends State<NowPlayingCover>
           ),
         ],
       ),
-      child: CoverArt(
-        seed: widget.song.title,
-        image: artwork,
-        size: size,
-        radius: AppRadii.nowPlaying,
-        child: artwork == null
-            ? Lottie.asset(
+      // Only the art is the hero; the Lottie stays on this page, so the
+      // flight never re-mounts it and its loop never restarts.
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CoverHero(
+            seed: widget.song.title,
+            image: artwork,
+            size: size,
+            radius: AppRadii.nowPlaying,
+          ),
+          if (artwork == null)
+            FadeTransition(
+              opacity: _lottieFade ?? kAlwaysCompleteAnimation,
+              child: Lottie.asset(
                 'assets/json/music_player.json',
                 controller: _lottie,
                 width: size * _lottieScale,
                 height: size * _lottieScale,
                 fit: BoxFit.contain,
-              )
-            : null,
+              ),
+            ),
+        ],
       ),
     );
   }

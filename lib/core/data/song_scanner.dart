@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
+import '../models/media_access_model.dart';
 import '../models/song_model.dart';
 import '../models/scan_result_model.dart';
 
@@ -27,25 +28,26 @@ class SongScanner {
     '.amr',
   };
 
-  Future<ScanResult> scan() async {
+  // Android's MediaStore and the iOS music library are both read through
+  // on_audio_query; other platforms only have the folder walk.
+  static bool get _hasMediaLibrary => Platform.isAndroid || Platform.isIOS;
+
+  // access is the answer to the media permission, asked for before the scan.
+  Future<ScanResult> scan({required MediaAccess access}) async {
     final songs = <String, Song>{};
-    var permissionGranted = !Platform.isAndroid;
+    final granted = access == MediaAccess.granted;
     String? error;
 
-    if (Platform.isAndroid) {
+    if (_hasMediaLibrary && granted) {
       try {
-        permissionGranted =
-            await _audioQuery.checkAndRequest(retryRequest: true);
-        if (permissionGranted) {
-          final indexed = await _audioQuery.querySongs(
-            uriType: UriType.EXTERNAL,
-            ignoreCase: true,
-          );
-          for (final model in indexed) {
-            final song = _fromMediaStore(model);
-            if (song == null) continue;
-            songs[song.path] = song;
-          }
+        final indexed = await _audioQuery.querySongs(
+          uriType: UriType.EXTERNAL,
+          ignoreCase: true,
+        );
+        for (final model in indexed) {
+          final song = _fromMediaStore(model);
+          if (song == null) continue;
+          songs[song.path] = song;
         }
       } catch (exception, stackTrace) {
         debugPrint('MediaStore scan failed: $exception\n$stackTrace');
@@ -63,7 +65,7 @@ class SongScanner {
       error ??= 'Some storage volumes could not be scanned.';
     }
 
-    if (Platform.isAndroid && !permissionGranted && songs.isEmpty) {
+    if (_hasMediaLibrary && !granted && songs.isEmpty) {
       error = 'Allow audio access to scan the music on this device.';
     }
 
@@ -71,15 +73,19 @@ class SongScanner {
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return ScanResult(
       songs: library,
-      permissionGranted: permissionGranted || songs.isNotEmpty,
+      access: songs.isNotEmpty ? MediaAccess.granted : access,
       error: library.isEmpty ? error : null,
     );
   }
 
+  // Reads the raw map: on iOS the path and title are null for cloud or DRM
+  // items, and the typed getters would throw and fail the whole scan. Those
+  // items have nothing playable on the device, so they are skipped.
   Song? _fromMediaStore(SongModel model) {
-    final filePath = model.data.trim();
+    final info = model.getMap;
+    final filePath = (info['_data'] as String?)?.trim() ?? '';
     if (filePath.isEmpty) return null;
-    final title = _label(model.title, _fileName(filePath));
+    final title = _label(info['title'] as String?, _fileName(filePath));
     return Song(
       path: filePath,
       title: title,
@@ -96,6 +102,9 @@ class SongScanner {
   }
 
   Future<List<Directory>> _volumeRoots() async {
+    // An iOS app only sees its own sandbox, which holds no music; the library
+    // query is the only source there.
+    if (Platform.isIOS) return const [];
     if (Platform.isAndroid) {
       final storage = Directory('/storage');
       if (!await storage.exists()) return const [];

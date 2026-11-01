@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_name.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
 
@@ -17,7 +18,7 @@ class Wordmark extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Text(
-      'Z-PLAY',
+      appName,
       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
             fontSize: fontSize,
             letterSpacing: 0,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../navigation/navigation_service.dart';
+import 'app_name.dart';
 import '../navigation/app_router.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -16,7 +17,7 @@ class ZPlayApp extends StatelessWidget {
     final darkTheme = context.watch<LibraryViewModel>().settings.darkTheme;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Z-PLAY',
+      title: appName,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: darkTheme ? ThemeMode.dark : ThemeMode.light,

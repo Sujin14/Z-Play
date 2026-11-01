@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/services/platform_capabilities.dart';
 import '../../../core/state/library_view_model.dart';
+import '../model/library_tab_model.dart';
 import '../view_model/library_tabs_view_model.dart';
 import '../widgets/albums_tab.dart';
 import '../widgets/artists_tab.dart';
@@ -22,13 +24,20 @@ class LibraryView extends StatefulWidget {
 
 class _LibraryViewState extends State<LibraryView>
     with SingleTickerProviderStateMixin {
-  // Rebuilds on swipe too, so the chips and count follow the visible tab.
-  late final TabController _tabController =
-      TabController(length: LibraryTabsViewModel.tabs.length, vsync: this)
-        ..addListener(() {
-          if (mounted) setState(() {});
-        });
+  late final List<LibraryTab> _tabs;
+  late final TabController _tabController;
   final TextEditingController _search = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = LibraryTabsViewModel.tabsFor(context.read<PlatformCapabilities>());
+    // Rebuilds on swipe too, so the chips and count follow the visible tab.
+    _tabController = TabController(length: _tabs.length, vsync: this)
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
+  }
 
   @override
   void dispose() {
@@ -40,15 +49,15 @@ class _LibraryViewState extends State<LibraryView>
   @override
   Widget build(BuildContext context) {
     final library = context.watch<LibraryViewModel>();
-    final tabs =
-        LibraryTabsViewModel(library, selectedTab: _tabController.index);
+    final tabs = LibraryTabsViewModel(library,
+        tabs: _tabs, selectedTab: _tabController.index);
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LibraryHeader(onRescan: tabs.isLoading ? null : library.rescan),
+            const LibraryHeader(),
             LibrarySearchField(
               controller: _search,
               hasQuery: tabs.isSearching,
@@ -60,7 +69,7 @@ class _LibraryViewState extends State<LibraryView>
             ),
             const SizedBox(height: 16),
             LibraryTabChips(
-              tabs: LibraryTabsViewModel.tabs,
+              tabs: tabs.labels,
               selected: _tabController.index,
               onSelected: _tabController.animateTo,
             ),
@@ -75,10 +84,13 @@ class _LibraryViewState extends State<LibraryView>
                   : TabBarView(
                       controller: _tabController,
                       children: [
-                        SongsTab(tabs: tabs),
-                        FoldersTab(tabs: tabs),
-                        AlbumsTab(tabs: tabs),
-                        ArtistsTab(tabs: tabs),
+                        for (final tab in _tabs)
+                          switch (tab) {
+                            LibraryTab.songs => SongsTab(tabs: tabs),
+                            LibraryTab.folders => FoldersTab(tabs: tabs),
+                            LibraryTab.albums => AlbumsTab(tabs: tabs),
+                            LibraryTab.artists => ArtistsTab(tabs: tabs),
+                          },
                       ],
                     ),
             ),

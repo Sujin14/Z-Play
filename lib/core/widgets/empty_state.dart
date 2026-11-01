@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
+import 'ghost_button.dart';
 import 'primary_button.dart';
 
 class EmptyState extends StatelessWidget {
@@ -13,6 +14,9 @@ class EmptyState extends StatelessWidget {
     this.actionLabel,
     this.actionIcon,
     this.onAction,
+    this.secondaryActionLabel,
+    this.secondaryActionIcon,
+    this.onSecondaryAction,
     this.error = false,
     this.badge,
     this.scrollable = true,
@@ -24,6 +28,9 @@ class EmptyState extends StatelessWidget {
   final String? actionLabel;
   final IconData? actionIcon;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final IconData? secondaryActionIcon;
+  final VoidCallback? onSecondaryAction;
   final bool error;
 
   // Replaces the rings and icon (e.g. the large "404").
@@ -92,6 +99,14 @@ class EmptyState extends StatelessWidget {
           const SizedBox(height: 24),
           PrimaryButton(
               label: actionLabel!, icon: actionIcon, onPressed: onAction),
+        ],
+        if (secondaryActionLabel != null) ...[
+          const SizedBox(height: 12),
+          GhostButton(
+            label: secondaryActionLabel!,
+            icon: secondaryActionIcon,
+            onPressed: onSecondaryAction,
+          ),
         ],
       ],
     );

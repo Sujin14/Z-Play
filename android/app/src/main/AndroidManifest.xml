@@ -6,7 +6,7 @@
         android:maxSdkVersion="32"/>
 
     <application
-        android:label="Z-Play"
+        android:label="Z Play"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

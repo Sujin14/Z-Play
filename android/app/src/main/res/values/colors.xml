@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark page gradient's base color, shown before Flutter draws so
+         there is no white flash in either theme. -->
+    <color name="launch_background">#031109</color>
+</resources>

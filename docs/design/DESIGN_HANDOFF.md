@@ -1,4 +1,4 @@
-# Z-PLAY redesign: handoff for the build
+# Z Play redesign: handoff for the build
 
 Visual reference: the exported PDF in this folder (one page per artboard). Code layout: see docs/ARCHITECTURE.md. Build to match it. This file gives exact values the PDF can't.
 Keep every feature in the original UI report. This is a visual and layout redesign, not a feature change.

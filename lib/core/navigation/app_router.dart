@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../features/favorites/view/favorites_view.dart';
+import '../../features/help/view/help_view.dart';
+import '../../features/hidden_folders/view/hidden_folders_view.dart';
 import '../../features/library/view/library_view.dart';
 import '../../features/not_found/view/not_found_view.dart';
 import '../../features/shell/view/shell_view.dart';
@@ -8,6 +10,7 @@ import '../../features/splash/view/splash_view.dart';
 import '../../features/history/view/history_view.dart';
 import '../../features/history/view_model/history_view_model.dart';
 import '../models/collection_args_model.dart';
+import 'now_playing_route.dart';
 import '../../features/collection/view/collection_view.dart';
 import '../../features/info/model/info_page_model.dart';
 import '../../features/info/view/info_view.dart';
@@ -29,6 +32,8 @@ class AppRoutes {
   static const about = '/about';
   static const privacy = '/privacy';
   static const terms = '/terms';
+  static const hiddenFolders = '/hidden-folders';
+  static const help = '/help';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -46,7 +51,8 @@ class AppRoutes {
           ),
         );
       case player:
-        return MaterialPageRoute(builder: (_) => const PlayerView());
+        return NowPlayingRoute(
+            settings: settings, builder: (_) => const PlayerView());
       case queue:
         return MaterialPageRoute(builder: (_) => const QueueView());
       case collection:
@@ -73,6 +79,10 @@ class AppRoutes {
       case terms:
         return MaterialPageRoute(
             builder: (_) => const InfoView(kind: InfoKind.terms));
+      case hiddenFolders:
+        return MaterialPageRoute(builder: (_) => const HiddenFoldersView());
+      case help:
+        return MaterialPageRoute(builder: (_) => const HelpView());
       default:
         return MaterialPageRoute(
           builder: (_) => NotFoundView(routeName: settings.name),

@@ -1,6 +1,6 @@
-# Z-PLAY architecture
+# Z Play architecture
 
-Z-PLAY is an offline music player built with Flutter. The code is organised
+Z Play is an offline music player built with Flutter. The code is organised
 **feature-first** and follows **MVVM** (model, view, view model):
 
 - `lib/core/` holds everything two or more features share: the data layer, the
@@ -10,13 +10,13 @@ Z-PLAY is an offline music player built with Flutter. The code is organised
   what that feature uses.
 
 State is shared with the `provider` package. Data is stored locally with Hive.
-Songs come from the device (Android's music index plus a folder walk); the app
-never goes online.
+Songs come from the device: Android's music index plus a folder walk, or the
+iOS music library. The app never goes online.
 
 ## Layers and data flow
 
 ```
- Device files / Android music index        Hive boxes on disk
+ Device files / music index (Android, iOS) Hive boxes on disk
           │                                      │
      SongScanner                            LibraryStore
           └──────────────┬───────────────────────┘
@@ -37,19 +37,23 @@ touch a repository, the store, the scanner or Hive.
 
 1. Bundled fonts only (`GoogleFonts.config.allowRuntimeFetching = false`) and
    the font licenses are registered.
-2. Hive is initialised, the two adapters are registered, and five boxes are
+2. `AppInfoService.load()` reads the app version once (via `package_info_plus`),
+   so the Settings footer and About page never wait for it.
+   `PlatformCapabilities.current()` records what the platform supports.
+3. Hive is initialised, the two adapters are registered, and five boxes are
    opened into one `LibraryStore` (see [Storage](#storage)).
-3. The repositories are built on the store: `LibraryRepository` (also given a
-   `SongScanner`) and `PlaylistRepository`.
-4. The three shared view models are built and linked:
+4. The repositories are built on the store: `LibraryRepository` (also given a
+   `SongScanner` and a `DeviceMediaPermissionService`) and `PlaylistRepository`.
+5. The three shared view models are built and linked:
    - `LibraryViewModel(libraryRepository)`
    - `PlaylistViewModel(repository: playlistRepository, library: library)`;
      playlists resolve their songs against the library.
    - `library.onCatalogChanged = playlists.load`: playlists reload whenever a
      scan changes the library.
-   - `PlayerViewModel(repository: libraryRepository, onPlayed: library.syncActivity)`:
+   - `PlayerViewModel(repository: libraryRepository, onPlayed: library.syncActivity, engine: JustAudioEngine())`:
      each play updates recently played and play counts.
-5. All three are provided with `MultiProvider` around `ZPlayApp`.
+6. `AppInfoService` and `PlatformCapabilities` (plain `Provider`s) and the three view models
+   (`ChangeNotifierProvider`) are provided with `MultiProvider` around `ZPlayApp`.
 
 ## Folder tree
 
@@ -59,9 +63,10 @@ lib/
   core/
     app/
       app.dart                    ZPlayApp: MaterialApp, light/dark theme, system bar style
+      app_name.dart               appName = 'Z Play', the only user-facing spelling of the name
     data/
       library_store.dart          All Hive reads and writes
-      song_scanner.dart           Android music index + folder walk → ScanResult
+      song_scanner.dart           Music index (Android, iOS) + folder walk (not on iOS) → ScanResult
       library_repository.dart     Songs, favorites, play counts, settings, saved queue
       playlist_repository.dart    Playlist create, rename, edit, delete, name validation
     models/
@@ -70,19 +75,36 @@ lib/
       playlist_model.dart + .g    Playlist (Hive, type id 1)
       music_file_model.dart + .g  MusicFile (Hive, type id 0)
       library_settings_model.dart, playback_snapshot_model.dart, scan_result_model.dart,
+      media_access_model.dart (granted / denied / permanentlyDenied),
+      playback_track_model.dart, track_change_model.dart, playback_error_model.dart
+                                  (what PlaybackEngine takes and reports),
       song_group_model.dart, song_sort_model.dart, collection_kind_model.dart,
       collection_args_model.dart, repeat_mode_model.dart
     navigation/
       app_router.dart             AppRoutes: route names and generateRoute
       navigation_service.dart     Global navigator key, push helpers, backToMain()
+      now_playing_route.dart      NowPlayingRoute: Now Playing grows out of / minimizes into
+                                  the mini player; swipe-down and predictive back
+      mini_player_anchor.dart     MiniPlayerAnchor: the mini player's GlobalKey, its rect
+                                  (live or computed fallback), bar geometry, cover Hero tag
     services/
       song_actions.dart           playFromList, playAll, shuffleAll, toggleFavorite,
                                   addToPlaylist (need a BuildContext for navigation/snackbars)
+      app_info_service.dart       App version from pubspec.yaml ("1.0.0+3"), loaded at startup
+      media_permission_service.dart  MediaPermissionService (interface) and the device version:
+                                  asks for music access and waits for the answer
+      platform_capabilities.dart  PlatformCapabilities: supportsFolders (false on iOS)
+      playback_engine.dart        PlaybackEngine (interface): a list of tracks the platform plays
+                                  through by itself (setQueue, play, pause, stop, seek, seekToIndex,
+                                  setSpeed, setRepeat, insert/remove/moveTrack, replaceAround;
+                                  playing, position, duration, trackChanges, queueCompleted, errors)
+      just_audio_engine.dart      JustAudioEngine: the only file that imports just_audio and
+                                  audio_session (music session, file vs URL source)
     state/
       library_view_model.dart     Songs, search, sort, folders/albums/artists, favorites,
                                   history, settings, scanning
       playlist_view_model.dart    Playlists, lookup by id or name
-      player_view_model.dart      Playback (audioplayers), queue, repeat, shuffle, speed,
+      player_view_model.dart      Playback (through PlaybackEngine), queue, repeat, shuffle, speed,
                                   sleep timer, next song
       playback_queue.dart         Queue order, shuffle and reorder logic
     theme/
@@ -95,6 +117,7 @@ lib/
       format_utils.dart           Clock, durations, track counts, countdown, speed labels
       text_utils.dart             Artist initial, album artist, short storage path
       layout_utils.dart           Tab list padding, cover grid cell height
+      support_contact.dart        supportEmail: the only copy of the support address in lib/
     widgets/                      Shared widgets (one public widget per file):
       gradient_scaffold, cover_art, cover_collage, album_cover, artist_avatar,
       song_tile, song_sliver_list, equalizer_bars, song_menu_sheet,
@@ -102,15 +125,16 @@ lib/
       primary_button, ghost_button, pill_button_label, round_icon_button,
       pill_chip, gradient_checkbox, dashed_box, app_sheet, snack_pill,
       empty_state, logo_mark, wordmark, detail_top_bar, collection_header,
-      play_shuffle_buttons, marquee_text
+      play_shuffle_buttons, marquee_text, cover_hero, minimize_drag_area
   features/
     splash/       view/splash_view.dart
                   view_model/splash_view_model.dart
-                  widgets/loading_stripe.dart
+                  widgets/splash_animation.dart, splash_wordmark.dart
     shell/        view/shell_view.dart
                   model/nav_bar_item_model.dart
                   widgets/floating_nav_bar.dart, mini_player.dart, shell_bottom_bars.dart
     library/      view/library_view.dart
+                  model/library_tab_model.dart    (LibraryTab: songs, folders, albums, artists)
                   view_model/library_tabs_view_model.dart
                   widgets/library_header, library_search_field, rotating_search_hint,
                           library_tab_chips,
@@ -145,16 +169,44 @@ lib/
     settings/     view/settings_view.dart
                   view_model/settings_view_model.dart
                   widgets/settings_section_label, settings_card, setting_row,
-                          chevron_icon, toggle_switch, hidden_folders_section,
-                          settings_footer
+                          chevron_icon, toggle_switch, settings_footer
+    hidden_folders/ view/hidden_folders_view.dart
+                  view_model/hidden_folders_view_model.dart
+                  widgets/hidden_folders_header, hidden_folder_list, hidden_folder_row
+    help/         view/help_view.dart
+                  model/faq_item.dart, help_content.dart   (page text and the six FAQs)
+                  view_model/help_view_model.dart
+                  widgets/help_header, faq_tile, help_contact_card
     info/         view/info_view.dart
                   model/info_page_model.dart      (About, Privacy, Terms text)
                   widgets/info_header.dart, info_section_card.dart
     not_found/    view/not_found_view.dart
 test/
   playback_queue_test.dart        Queue order, shuffle, repeat, play next
+  player_view_model_test.dart     PlayerViewModel on a FakePlaybackEngine: starts, the platform
+                                  moving on, repeat, end of queue and play after it, queue edits
+                                  and shuffle mirrored without a restart, both sleep modes, stale
+                                  starts, errors and skipping, restore, seekBy
   playlist_rename_test.dart       Rename, edit songs and duplicate names keep the playlist id
   hive_adapters_test.dart         Hive type ids and a playlist round trip from disk
+  splash_view_model_test.dart     Opens only when animation and library are both done; failure,
+                                  reduced-motion and safety fallbacks
+  splash_view_test.dart           The splash shows the Lottie and the wordmark (appName), on the
+                                  dark gradient in both themes, without overflow on a short screen
+  media_access_test.dart          Granting in the prompt goes straight on to the scan; denied and
+                                  permanently denied show the allow-access state with Open settings
+  platform_capabilities_test.dart No Folders tab where folders aren't supported
+  settings_view_model_test.dart   Rescan storage subtitle: Android wording, or "Refresh your music
+                                  library" on iOS
+  splash_startup_test.dart        Cold start with the real LibraryViewModel: no build-phase error,
+                                  splash hands over to the shell
+  app_info_service_test.dart      Version formatting with a fake package info loader
+  help_content_test.dart          6 FAQs on Android, 5 on iOS; iOS answers never mention hidden
+                                  folders; no email address in lib/ outside support_contact.dart
+  info_page_model_test.dart       About shows the service's version; support email; last-updated dates
+  now_playing_route_test.dart     750ms each way; clip starts on the mini player rect, ends full
+                                  screen, closes back onto it; content fade stagger; reduced
+                                  motion uses the fade
 ```
 
 ## Features
@@ -163,15 +215,17 @@ test/
 |---|---|---|---|---|
 | splash | SplashView | SplashViewModel | Library, Playlist, Player | – |
 | shell | ShellView | – | Player | NavBarItem |
-| library | LibraryView | LibraryTabsViewModel | Library, Player | – |
+| library | LibraryView | LibraryTabsViewModel | Library, Player (+ PlatformCapabilities) | LibraryTab |
 | collection | CollectionView | CollectionViewModel | Library | – |
 | favorites | FavoritesView | FavoritesViewModel | Library | – |
 | playlists | PlaylistsView, PlaylistDetailView | PlaylistsViewModel, PlaylistDetailViewModel | Playlist | – |
 | player | PlayerView | PlayerScreenViewModel | Player, Library | – |
 | queue | QueueView | QueueViewModel | Player | – |
 | history | HistoryView | HistoryViewModel | Library, Player | SegmentOption |
-| settings | SettingsView | SettingsViewModel | Library | – |
-| info | InfoView | – (static content) | – | InfoPage, InfoSection, InfoKind |
+| settings | SettingsView | SettingsViewModel | Library (+ AppInfoService, PlatformCapabilities) | – |
+| hidden_folders | HiddenFoldersView | HiddenFoldersViewModel | Library | – |
+| help | HelpView | HelpViewModel | – (+ PlatformCapabilities) | FaqItem, HelpContent |
+| info | InfoView | – (static content; About gets the version from AppInfoService) | – | InfoPage, InfoSection, InfoBlock (InfoParagraph, InfoBullets), InfoAction, InfoKind |
 | not_found | NotFoundView | – | – | – |
 
 `shell` hosts the four tabs (Library, Favorites, Playlists, Settings) in an
@@ -187,14 +241,86 @@ Defined in `core/navigation/app_router.dart`. The router is the only file in
 |---|---|---|
 | `/` | SplashView | – |
 | `/main` | ShellView (Library, Favorites, Playlists, Settings tabs) | – |
-| `/player` | PlayerView | – |
+| `/player` | PlayerView in a `NowPlayingRoute` (see [Now Playing transition](#now-playing-transition)) | – |
 | `/queue` | QueueView | – |
 | `/collection` | CollectionView | `CollectionArgs` (kind, id, title) |
 | `/playlist` | PlaylistDetailView | playlist name |
 | `/recent` | HistoryView (Recently played) | – |
 | `/most-played` | HistoryView (Most played) | – |
 | `/about`, `/privacy`, `/terms` | InfoView | – |
+| `/hidden-folders` | HiddenFoldersView (opened from Settings) | – |
+| `/help` | HelpView (opened from Settings, "Help & FAQ") | – |
 | anything else | NotFoundView | – |
+
+## Playback engine
+
+`PlayerViewModel` plays through `PlaybackEngine` (`core/services/`), wired in
+`main.dart` as `JustAudioEngine`; tests use `FakePlaybackEngine`.
+
+- **The platform moves on by itself.** The engine holds the whole queue
+  (just_audio `setAudioSources`), so the next song starts natively and
+  gaplessly. `PlaybackQueue` stays the single source of truth for order; the
+  engine's list mirrors it. The engine reports a native move as a
+  `TrackChange` with `automatic: true`, and `PlayerViewModel` then updates
+  `PlaybackQueue`, counts the play (not for repeat one), resets the 5-second
+  save marker and notifies.
+- **Queue edits keep the song playing.** Add → `insertTrack`; remove another
+  song → `removeTrack`; reorder → `moveTrack`; play next and shuffle →
+  `replaceAround` (everything but the current song is replaced). Removing
+  the current song reloads the list at the next one.
+- **Repeat** maps to the engine's loop modes; **speed** is a player setting
+  the engine keeps across songs.
+- **"End of track" sleep** trims the engine's list to the current song (with
+  loop off) so it stops at the end; finishing, cancelling or starting the
+  minute timer restores the list and repeat.
+- **Errors**, at the start or mid-song, show "Cannot play <title>." and skip
+  to the next song; a full pass of failures stops.
+- **After the queue ends**, play starts the last song again from 0.
+- **`seekBy`** (for the 10-second skips): rewind stops at 0; forward stops
+  `seekEndMargin` (50 ms) before the end so the song finishes by itself, and
+  is ignored while the length is unknown.
+- **Audio session:** `AudioSessionConfiguration.music()`. just_audio's own
+  handling (`handleInterruptions`, on by default) pauses on a call or Siri
+  and resumes afterwards only if it was playing, and pauses when headphones
+  are unplugged.
+
+## Now Playing transition
+
+Every way of opening Now Playing (the mini player, tapping a song, Play all,
+Shuffle) pushes `/player` through `NavigationService`, and the router wraps
+`PlayerView` in `NowPlayingRoute`.
+
+- **Morph.** The page is laid out once at full size. A `ClipRRect` with
+  `NowPlayingClipper` animates from the mini player's rect (22px radius) to
+  the full screen (0 radius) over 750ms (`Curves.easeInOutCubic`), and back
+  over 750ms on close. The rect, the radius and the cover Hero share that
+  curve. The fades are intervals of the route's linear progress (elapsed
+  time): the gradient fill (`AppTokens.background`) shows in the first 15%,
+  so the rect is visible from the start; the content fades in during 35–85%
+  of opening and out during the first 40% of closing; the cover's Lottie
+  appears in the last 20%. Only the clip and the opacities change per frame,
+  so nothing in the page rebuilds. With `MediaQuery.disableAnimations` the
+  route is a 150ms fade instead.
+- **Where it grows from.** `MiniPlayerAnchor.rectIn` returns the mini
+  player's live rect, read through `MiniPlayerAnchor.key` (set on the mini
+  player). When the mini player isn't laid out (the first song is starting),
+  it computes where the mini player will sit from the screen size, the safe
+  area and the bar geometry, which `ShellBottomBars` also lays itself out
+  with. The rect is always clamped to the screen.
+- **Cover.** `CoverHero` (tag `MiniPlayerAnchor.coverHeroTag`) wraps the
+  mini player's cover and the large cover. Its shuttle scales the art without
+  stretching and moves the corner radius between the two covers'. Only the
+  art flies; the Lottie stays on the page, so it never restarts.
+- **Swipe down.** `MinimizeDragArea` wraps the top bar and the cover only, so
+  the seek bar and sliders never start a dismissal. It claims a drag only
+  when the drag goes down and the page is at its scroll start. The drag drives
+  the route's controller linearly (the clip's top edge follows the finger);
+  past 25% of the height or a downward fling minimizes, otherwise it springs
+  back. Either way the rest runs for the remaining fraction of the
+  750ms route duration, at least 250ms.
+- **Back.** The chevron and system back pop the route, which plays the close
+  animation. Android predictive back events (only sent when the manifest opts
+  in) drive the same controller.
 
 ## View models
 
@@ -215,7 +341,11 @@ Where feature view models are built:
   rebuilds when that shared view model notifies, so the feature view model
   needs no provider of its own.
 - **`SplashViewModel`** is built once in `initState`, because the library load
-  must run only once.
+  must run only once. Its `start()` runs in a post-frame callback, because the
+  library load notifies listeners straight away and that isn't allowed while
+  the first frame is being built. Work that notifies is never started
+  directly from `initState`. It is the one feature view model with state of its own
+  (see [Splash](#splash)).
 - **`PlayerScreenViewModel`** is also built by the player widgets that rebuild
   on their own: the sleep timer sheet, the speed sheet, and the sleep countdown
   card and label (which tick every second).
@@ -225,8 +355,83 @@ Library's Songs tab watches the player, and the Now Playing title row watches
 the library for the favorite heart.
 
 Short-lived UI state stays in a widget's `State`: text and tab controllers,
-animation controllers (Lottie, equalizer, loading stripe), the play button's
-pressed flag, the selected history segment, and the search hint's rotation timer.
+animation controllers (Lottie, equalizer, splash Lottie), the play button's
+pressed flag, the selected history segment, the search hint's rotation timer,
+and which Help answer is open (`HelpViewModel` turns that index into the
+next one; only one answer is open at a time).
+
+## Info pages and support contact
+
+- `InfoPage` holds a title, an optional `lastUpdated` line (Privacy and Terms)
+  and a list of `InfoSection`s. A section has an optional heading (none for an
+  intro card), an ordered list of `InfoBlock`s (`InfoParagraph` or
+  `InfoBullets`), and an optional `InfoAction`. The only action is
+  `licenses`, which `InfoView` turns into `showLicensePage` with the app
+  version.
+- The About page's Version section comes from `AppInfoService`, never a
+  hard-coded string.
+- The support address lives only in `core/utils/support_contact.dart`
+  (`supportEmail`). The info text and the Help page both read it;
+  `help_content_test.dart` fails if any other file in `lib/` contains an
+  email address.
+
+## Splash
+
+The splash shows `assets/json/splash.json` with the app name 24px below it,
+as one group centered on the **dark** page gradient whatever the app theme
+(the splash overrides `AppTokens` with `AppTokens.dark`), so it matches the
+native launch color and the Lottie's white strokes stay visible. The shell
+after it uses the chosen theme; the normal page fade covers the change. The
+splash also asks for light status bar icons and a `#031109` navigation bar
+with light icons, through its own `AnnotatedRegion`,
+nested inside the app's theme-based one, so the theme's style returns as soon
+as the splash leaves the tree. The
+Lottie is the smallest of 70% of the screen width, 45% of its height and 360
+logical px, and the group scales down (`FittedBox`) rather than overflow on
+very short screens. `SplashWordmark` shows `appName` in Sora 28/800
+in the dark theme's text color; it fades in with an 8px upward slide over
+600ms, starting 300ms in (shown at once with reduced motion). Its space is
+reserved from the first frame, so the Lottie never moves, and the fade has no
+effect on when the splash leaves. `SplashAnimation` plays the Lottie once and
+reports loaded, finished or failed; `SplashViewModel` decides when to leave:
+
+- It opens the shell once the animation has finished **and** the library has
+  loaded (library, then playlists, then the saved queue), whichever comes
+  last. The library load starts at once and doesn't wait for the animation.
+- If the Lottie fails to load, the animation counts as finished after 1s.
+- With `MediaQuery.disableAnimations`, the last frame is shown still for
+  600ms.
+- If the animation reports nothing at all, it counts as finished after 6s,
+  so the splash can't get stuck.
+
+The native launch screens (Android `launch_background` and window
+background, iOS `LaunchScreen.storyboard`) are a plain `#031109`, the dark
+gradient's base color, in both themes. On Android 12+ the system splash
+(`values-v31`, `values-night-v31`) uses the same color, and its icon is that
+color too, so only the plain dark screen shows: the launcher icon has no
+adaptive foreground to use there.
+
+## Platforms
+
+- **Music access.** `LibraryRepository` asks `MediaPermissionService` before a
+  scan and waits for the answer, then passes it to `SongScanner`. On iOS the
+  device service uses permission_handler (`Permission.mediaLibrary`; the
+  Podfile enables `PERMISSION_MEDIA_LIBRARY=1`), because on_audio_query's iOS
+  request returns before the user answers. Android keeps on_audio_query's
+  `checkAndRequest`. `LibraryViewModel.access` holds the result; when access
+  is denied and nothing was found, the Songs tab's error state offers
+  "Try again" and "Open settings" (`openAppSettings()`).
+- **Folders.** `PlatformCapabilities.supportsFolders` is false on iOS. View
+  models read it: the Library has no Folders tab, Settings has no Hidden
+  folders row (so `/hidden-folders` can't be reached), and Help leaves out
+  the folder question (5 FAQs instead of 6). FAQs whose answer mentions
+  folders carry an `answerWithoutFolders` that `HelpViewModel` shows instead.
+- **iOS.** `SongScanner` reads the iOS music library through on_audio_query
+  and skips the folder walk, because an iOS app only sees its own sandbox.
+  Library items without an asset URL (cloud or DRM) are skipped. iOS song
+  paths are `ipod-library://` URLs, so `PlayerViewModel` plays them as URLs;
+  everything else plays as a device file. These checks live in `core/`, never
+  in views.
 
 ## Rules
 
@@ -250,6 +455,11 @@ pressed flag, the selected history segment, and the search hint's rotation timer
 
 - Files and folders are `snake_case`. No file, folder or class keeps the old
   `Z` prefix; the brand class `ZPlayApp` is the only exception.
+- The user-facing name is exactly "Z Play" (`appName` in `core/app/`); text
+  people read uses that constant. Eyebrows show it in capitals with
+  `appName.toUpperCase()`, since text styles can't change case. Identifiers
+  keep their own spelling: the Dart package `musicplayer`, the Android
+  applicationId and namespace, the iOS bundle identifier, and `ZPlayApp`.
 - Screens are `<name>_view.dart`, view models `<name>_view_model.dart`, data
   classes `<name>_model.dart`, and widgets use a clear noun (`song_tile.dart`,
   `mini_player.dart`).

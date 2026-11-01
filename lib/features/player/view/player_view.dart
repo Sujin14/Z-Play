@@ -7,6 +7,7 @@ import '../../../core/state/player_view_model.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/gradient_scaffold.dart';
+import '../../../core/widgets/minimize_drag_area.dart';
 import '../view_model/player_screen_view_model.dart';
 import '../widgets/now_playing_cover.dart';
 import '../widgets/playback_controls.dart';
@@ -33,7 +34,9 @@ class PlayerView extends StatelessWidget {
                   Padding(
                     padding:
                         EdgeInsets.symmetric(horizontal: AppSpacing.screen),
-                    child: PlayerTopBar(fromLine: null),
+                    child: MinimizeDragArea(
+                      child: PlayerTopBar(fromLine: null),
+                    ),
                   ),
                   Expanded(
                     child: EmptyState(
@@ -60,11 +63,15 @@ class PlayerView extends StatelessWidget {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            PlayerTopBar(fromLine: screen.fromLine),
-                            NowPlayingCover(
-                                player: player,
-                                song: song,
-                                size: screen.coverSize(constraints)),
+                            MinimizeDragArea(
+                              child: PlayerTopBar(fromLine: screen.fromLine),
+                            ),
+                            MinimizeDragArea(
+                              child: NowPlayingCover(
+                                  player: player,
+                                  song: song,
+                                  size: screen.coverSize(constraints)),
+                            ),
                             PlayerTitleRow(song: song),
                             SeekBar(player: player),
                             if (screen.error != null)

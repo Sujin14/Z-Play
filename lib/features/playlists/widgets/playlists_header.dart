@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app/app_name.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/primary_button.dart';
 
@@ -21,7 +22,7 @@ class PlaylistsHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Z-PLAY', style: text.labelSmall),
+                Text(appName.toUpperCase(), style: text.labelSmall),
                 const SizedBox(height: 4),
                 Text('Playlists', style: text.headlineLarge),
               ],

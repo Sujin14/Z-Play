@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/library_settings_model.dart';
+import '../models/media_access_model.dart';
 import '../models/song_model.dart';
 import '../data/library_repository.dart';
 import '../models/collection_kind_model.dart';
@@ -16,6 +17,7 @@ class LibraryViewModel extends ChangeNotifier {
 
   bool loading = false;
   String? error;
+  MediaAccess access = MediaAccess.granted;
   String query = '';
   SongSort sort = SongSort.title;
   LibrarySettings settings = const LibrarySettings();
@@ -85,6 +87,8 @@ class LibraryViewModel extends ChangeNotifier {
 
   Future<void> rescan() => _reload(refresh: true);
 
+  Future<void> openPermissionSettings() => _repository.openPermissionSettings();
+
   Future<void> syncActivity() async {
     _favoritePaths = _repository.favoritePaths();
     _recentPaths = _repository.recentPaths();
@@ -142,6 +146,7 @@ class LibraryViewModel extends ChangeNotifier {
       final ScanResult result = await _repository.load(refresh: refresh);
       _songs = _repository.songs;
       error = result.error;
+      access = result.access;
       await syncActivity();
       onCatalogChanged?.call();
     } catch (exception) {

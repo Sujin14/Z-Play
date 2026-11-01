@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/navigation/mini_player_anchor.dart';
 import '../../../core/state/player_view_model.dart';
 import '../model/nav_bar_item_model.dart';
 import 'floating_nav_bar.dart';
@@ -22,34 +23,28 @@ class ShellBottomBars extends StatelessWidget {
   final ValueChanged<int> onTabSelected;
   final VoidCallback onOpenPlayer;
 
-  static const double _margin = 16;
-  static const double _navHeight = 68;
-  static const double _miniHeight = 64;
-  // Mini player bottom edge sits 96px from the screen bottom.
-  static const double _miniBottom = 96;
-  static const double _miniGap = _miniBottom - _navHeight - _margin;
-
   @override
   Widget build(BuildContext context) {
     final hasSong = player.current != null;
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(_margin, 0, _margin, _margin),
+        padding: const EdgeInsets.fromLTRB(MiniPlayerAnchor.margin, 0,
+            MiniPlayerAnchor.margin, MiniPlayerAnchor.margin),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (hasSong)
               Padding(
-                padding: const EdgeInsets.only(bottom: _miniGap),
+                padding: const EdgeInsets.only(bottom: MiniPlayerAnchor.gap),
                 child: SizedBox(
-                  height: _miniHeight,
+                  height: MiniPlayerAnchor.height,
                   child: MiniPlayer(player: player, onOpen: onOpenPlayer),
                 ),
               ),
             SizedBox(
-              height: _navHeight,
+              height: MiniPlayerAnchor.navHeight,
               child: FloatingNavBar(
                 items: items,
                 currentIndex: currentIndex,

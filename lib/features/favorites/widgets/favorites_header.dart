@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app/app_name.dart';
 import '../../../core/theme/app_sizes.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -21,7 +22,7 @@ class FavoritesHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Z-PLAY', style: text.labelSmall),
+                Text(appName.toUpperCase(), style: text.labelSmall),
                 const SizedBox(height: 4),
                 Text('Favorites', style: text.headlineLarge),
               ],

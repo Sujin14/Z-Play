@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app/app_name.dart';
 import '../../../core/navigation/navigation_service.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_tokens.dart';
@@ -24,7 +25,7 @@ class NotFoundView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.screen, 16, AppSpacing.screen, 0),
-              child: Text('Z-PLAY', style: text.labelSmall),
+              child: Text(appName.toUpperCase(), style: text.labelSmall),
             ),
             Expanded(
               child: EmptyState(

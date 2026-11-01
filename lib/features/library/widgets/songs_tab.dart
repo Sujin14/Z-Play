@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/app/app_name.dart';
 import '../../../core/services/song_actions.dart';
 import '../../../core/state/player_view_model.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -25,10 +26,13 @@ class SongsTab extends StatelessWidget {
           icon: Icons.warning_amber_rounded,
           title: tabs.error,
           message:
-              'Check that Z-PLAY can access your audio files, then try again.',
+              'Check that $appName can access your audio files, then try again.',
           actionLabel: 'Try again',
           actionIcon: Icons.refresh_rounded,
           onAction: tabs.library.rescan,
+          secondaryActionLabel: tabs.showsOpenSettings ? 'Open settings' : null,
+          secondaryActionIcon: Icons.settings_outlined,
+          onSecondaryAction: tabs.openSettings,
         ),
       );
     }

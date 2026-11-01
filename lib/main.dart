@@ -6,6 +6,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'core/app/app.dart';
+import 'core/services/app_info_service.dart';
+import 'core/services/just_audio_engine.dart';
+import 'core/services/media_permission_service.dart';
+import 'core/services/platform_capabilities.dart';
 import 'core/data/library_store.dart';
 import 'core/data/song_scanner.dart';
 import 'core/models/music_file_model.dart';
@@ -26,6 +30,8 @@ Future<void> main() async {
       yield LicenseEntryWithLineBreaks(['google_fonts'], text);
     }
   });
+  final appInfo = await AppInfoService.load();
+  final capabilities = PlatformCapabilities.current();
   await Hive.initFlutter();
   if (!Hive.isAdapterRegistered(MusicFileAdapter().typeId)) {
     Hive.registerAdapter(MusicFileAdapter());
@@ -44,6 +50,7 @@ Future<void> main() async {
   final libraryRepository = LibraryRepository(
     store: store,
     scanner: SongScanner(),
+    permissions: DeviceMediaPermissionService(),
   );
   final playlistRepository = PlaylistRepository(store);
   final library = LibraryViewModel(libraryRepository);
@@ -55,11 +62,14 @@ Future<void> main() async {
   final player = PlayerViewModel(
     repository: libraryRepository,
     onPlayed: library.syncActivity,
+    engine: JustAudioEngine(),
   );
 
   runApp(
     MultiProvider(
       providers: [
+        Provider.value(value: appInfo),
+        Provider.value(value: capabilities),
         ChangeNotifierProvider.value(value: library),
         ChangeNotifierProvider.value(value: playlists),
         ChangeNotifierProvider.value(value: player),
